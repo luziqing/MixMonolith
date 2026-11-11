@@ -1,0 +1,1735 @@
+import re
+
+hud_content = """<!DOCTYPE html>
+<html lang="zh-CN" class="h-full overflow-hidden">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>拯救者 R7000 · 小米 MIX 翻页日历时钟 HUD</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script>
+    (function initCosmicStarfield() {
+      const cCanvas = document.getElementById('cosmos-canvas');
+      if (!cCanvas) return;
+      const cCtx = cCanvas.getContext('2d');
+      let w = 0, h = 0;
+      let stars = [];
+      let meteors = [];
+      let lastMeteorTime = 0;
+
+      function resizeCosmos() {
+        const rect = cCanvas.getBoundingClientRect();
+        w = cCanvas.width = rect.width || window.innerWidth;
+        h = cCanvas.height = rect.height || 30;
+        initCosmosStars();
+      }
+      window.addEventListener('resize', resizeCosmos);
+
+      function initCosmosStars() {
+        stars = [];
+        const count = 46;
+        for (let i = 0; i < count; i++) {
+          stars.push({
+            x: Math.random() * (w || 360),
+            y: Math.random() * (h || 30),
+            radius: Math.random() * 1.3 + 0.35,
+            phase: Math.random() * Math.PI * 2,
+            speed: Math.random() * 0.035 + 0.015,
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: (Math.random() - 0.5) * 0.08,
+            colorType: Math.random() > 0.35 ? 'cyan' : (Math.random() > 0.5 ? 'gold' : 'white')
+          });
+        }
+      }
+
+      function spawnMeteor() {
+        meteors.push({
+          x: Math.random() * (w * 0.5),
+          y: Math.random() * (h * 0.4),
+          len: Math.random() * 18 + 10,
+          speed: Math.random() * 3 + 2.5,
+          angle: 0.22,
+          alpha: 1,
+          decay: Math.random() * 0.035 + 0.02
+        });
+      }
+
+      let time = 0;
+      function renderCosmos() {
+        time += 1;
+        if (!w || !h) {
+          resizeCosmos();
+        }
+        cCtx.clearRect(0, 0, w, h);
+
+        // A. 核心深空呼吸星云光晕 (Cosmic Nebula Breathing Glow)
+        const breath = (Math.sin(time * 0.04) + 1) / 2; // 0.0 to 1.0
+        const gradX = w * 0.5 + Math.sin(time * 0.012) * 35;
+        const gradY = h * 0.5;
+        const nebulaRad = 65 + breath * 45;
+
+        const nebula = cCtx.createRadialGradient(gradX, gradY, 0, gradX, gradY, nebulaRad);
+        if (isDarkMode) {
+          nebula.addColorStop(0, `rgba(0, 220, 255, ${0.14 + breath * 0.20})`);
+          nebula.addColorStop(0.45, `rgba(130, 60, 255, ${0.09 + breath * 0.12})`);
+          nebula.addColorStop(0.85, `rgba(223, 186, 115, ${0.04 + breath * 0.07})`);
+          nebula.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        } else {
+          nebula.addColorStop(0, `rgba(70, 140, 250, ${0.12 + breath * 0.14})`);
+          nebula.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        }
+        cCtx.fillStyle = nebula;
+        cCtx.fillRect(0, 0, w, h);
+
+        // B. 星际微光共振连线 (Constellation Filaments)
+        cCtx.lineWidth = 0.5;
+        for (let i = 0; i < stars.length; i++) {
+          for (let j = i + 1; j < stars.length; j++) {
+            const dx = stars[i].x - stars[j].x;
+            const dy = stars[i].y - stars[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 26) {
+              const lineAlpha = (1 - dist / 26) * (0.12 + breath * 0.15);
+              cCtx.strokeStyle = isDarkMode ? `rgba(0, 240, 255, ${lineAlpha})` : `rgba(100, 140, 220, ${lineAlpha})`;
+              cCtx.beginPath();
+              cCtx.moveTo(stars[i].x, stars[i].y);
+              cCtx.lineTo(stars[j].x, stars[j].y);
+              cCtx.stroke();
+            }
+          }
+        }
+
+        // C. 动态呼吸闪烁群星与十字星芒 (Breathing Stars & Cross Flares)
+        for (let i = 0; i < stars.length; i++) {
+          const s = stars[i];
+          s.phase += s.speed;
+          s.x += s.vx;
+          s.y += s.vy;
+          if (s.x < 0) s.x = w;
+          if (s.x > w) s.x = 0;
+          if (s.y < 0) s.y = h;
+          if (s.y > h) s.y = 0;
+
+          const starAlpha = Math.max(0.1, (Math.sin(s.phase) + 1) / 2 * 0.85 + 0.15);
+          let rgb = '255, 255, 255';
+          if (s.colorType === 'cyan') rgb = '0, 240, 255';
+          else if (s.colorType === 'gold') rgb = '255, 215, 80';
+
+          cCtx.beginPath();
+          cCtx.arc(s.x, s.y, s.radius * (0.8 + breath * 0.35), 0, Math.PI * 2);
+          cCtx.fillStyle = `rgba(${rgb}, ${starAlpha})`;
+          cCtx.shadowBlur = starAlpha > 0.75 ? 6 : 0;
+          cCtx.shadowColor = `rgba(${rgb}, 0.85)`;
+          cCtx.fill();
+          cCtx.shadowBlur = 0;
+
+          if (starAlpha > 0.82) {
+            cCtx.strokeStyle = `rgba(${rgb}, ${starAlpha * 0.65})`;
+            cCtx.lineWidth = 0.6;
+            const flareLen = s.radius * 2.8;
+            cCtx.beginPath();
+            cCtx.moveTo(s.x - flareLen, s.y);
+            cCtx.lineTo(s.x + flareLen, s.y);
+            cCtx.moveTo(s.x, s.y - flareLen);
+            cCtx.lineTo(s.x, s.y + flareLen);
+            cCtx.stroke();
+          }
+        }
+
+        // D. 定时划过微型流星 (Cosmic Shooting Stars)
+        const now = Date.now();
+        if (now - lastMeteorTime > 3000 + Math.random() * 2200) {
+          spawnMeteor();
+          lastMeteorTime = now;
+        }
+
+        for (let i = meteors.length - 1; i >= 0; i--) {
+          const m = meteors[i];
+          m.x += m.speed * Math.cos(m.angle);
+          m.y += m.speed * Math.sin(m.angle);
+          m.alpha -= m.decay;
+
+          if (m.alpha <= 0 || m.x > w || m.y > h) {
+            meteors.splice(i, 1);
+            continue;
+          }
+
+          const tailX = m.x - m.len * Math.cos(m.angle);
+          const tailY = m.y - m.len * Math.sin(m.angle);
+          const meteorGrad = cCtx.createLinearGradient(tailX, tailY, m.x, m.y);
+          meteorGrad.addColorStop(0, 'rgba(0, 240, 255, 0)');
+          meteorGrad.addColorStop(0.7, `rgba(0, 240, 255, ${m.alpha * 0.6})`);
+          meteorGrad.addColorStop(1, `rgba(255, 255, 255, ${m.alpha * 0.95})`);
+
+          cCtx.strokeStyle = meteorGrad;
+          cCtx.lineWidth = 1.2;
+          cCtx.beginPath();
+          cCtx.moveTo(tailX, tailY);
+          cCtx.lineTo(m.x, m.y);
+          cCtx.stroke();
+        }
+
+        requestAnimationFrame(renderCosmos);
+      }
+
+      resizeCosmos();
+      renderCosmos();
+    })();
+
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;700&family=Share+Tech+Mono&display=swap');
+
+        /* 中英双字体分离系统 (Decoupled Bilingual Typography) */
+    :root {
+      /* 西文字体体系: 科技/数值/时钟使用 Share Tech Mono，尊贵品牌使用 Cinzel */
+      --font-en-luxury: 'Cinzel', serif;
+      --font-en-tech: 'Share Tech Mono', 'Consolas', monospace;
+      --font-en-sans: 'Montserrat', sans-serif;
+
+      /* 中文字体体系: 优先搭载小米官方旗舰 MiSans，优雅克制，备选 Noto Sans SC / 苹方 */
+      --font-zh: 'MiSans', 'Noto Sans SC', 'PingFang SC', 'Source Han Sans SC', 'Microsoft YaHei', sans-serif;
+    }
+
+    body {
+      background: var(--bg-chassis);
+      color: var(--text-main);
+      font-family: var(--font-zh);
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* 显式中文字体 */
+    .font-zh {
+      font-family: var(--font-zh) !important;
+      letter-spacing: 0.06em;
+    }
+
+    /* 显式西文品牌奢华字体 */
+    .font-en-luxury {
+      font-family: var(--font-en-luxury), var(--font-zh) !important;
+      letter-spacing: 0.22em;
+    }
+
+    /* 显式西文数码/极客等宽字体 */
+    .font-en-tech {
+      font-family: var(--font-en-tech), var(--font-zh) !important;
+    }
+
+    /* 兼容旧类名：实现西文优先匹配，中文自动调用 MiSans/Noto Sans SC */
+    .font-luxury {
+      font-family: var(--font-en-luxury), var(--font-zh);
+      letter-spacing: 0.16em;
+    }
+    .font-mono-tech {
+      font-family: var(--font-en-tech), var(--font-zh);
+    }
+
+    /* Global Reset & Theme Variables */
+    :root {
+      --bg-chassis: #0a0a0c;
+      --card-bg: linear-gradient(135deg, rgba(18, 22, 32, 0.92) 0%, rgba(10, 12, 18, 0.96) 100%);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-top: rgba(255, 255, 255, 0.16);
+      --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      --text-main: #f1f5f9;
+      --text-sub: #8492a6;
+      --gold-primary: #dfba73;
+      --gold-border: rgba(223, 186, 115, 0.3);
+      --gold-bg: rgba(223, 186, 115, 0.08);
+      --pillar-track-bg: rgba(0, 0, 0, 0.7);
+      --pillar-border: rgba(255, 255, 255, 0.07);
+      --sparkline-bg: rgba(0, 0, 0, 0.35);
+      --capsule-bg: rgba(0, 0, 0, 0.35);
+      --header-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 100%);
+      --footer-bg: linear-gradient(0deg, #000000 0%, rgba(0, 0, 0, 0.8) 70%, transparent 100%);
+      
+      /* User's Exact Flip Clock Variables */
+      --cal-square-bg: #ffffff;
+      --cal-square-border: rgba(255, 255, 255, 0.3);
+      --cal-gold-gradient: linear-gradient(135deg, #d4af37 0%, #b8860b 50%, #a67c00 100%);
+      --clock-round-bg: #16181f;
+      --clock-round-border: rgba(255, 255, 255, 0.08);
+    }
+
+    body.theme-light {
+      --bg-chassis: #eaedf4;
+      --card-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 248, 252, 0.94) 100%);
+      --card-border: rgba(140, 160, 190, 0.18);
+      --card-border-top: rgba(255, 255, 255, 1);
+      --card-shadow: 0 8px 24px rgba(100, 120, 160, 0.1), 0 1px 4px rgba(100, 120, 160, 0.05), inset 0 1px 0 #ffffff;
+      --text-main: #090e1a;
+      --text-sub: #5a6b82;
+      --gold-primary: #a87e2b;
+      --gold-border: rgba(168, 126, 43, 0.3);
+      --gold-bg: rgba(168, 126, 43, 0.08);
+      --pillar-track-bg: rgba(220, 226, 238, 0.8);
+      --pillar-border: rgba(160, 175, 200, 0.22);
+      --sparkline-bg: rgba(235, 240, 248, 0.55);
+      --capsule-bg: rgba(240, 244, 250, 0.8);
+      --header-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, transparent 100%);
+      --footer-bg: linear-gradient(0deg, #eaedf4 0%, rgba(234, 237, 244, 0.85) 70%, transparent 100%);
+      
+      --cal-square-bg: #ffffff;
+      --cal-square-border: rgba(180, 195, 215, 0.4);
+      --cal-gold-gradient: linear-gradient(135deg, #b8860b 0%, #8c6500 100%);
+      --clock-round-bg: #e2e7f0;
+      --clock-round-border: rgba(140, 160, 190, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background-color 0.35s ease, border-color 0.35s ease, color 0.35s ease;
+    }
+
+    body {
+      background: var(--bg-chassis);
+      color: var(--text-main);
+      font-family: 'Montserrat', -apple-system, sans-serif;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+
+    .font-mono-tech { font-family: 'Share Tech Mono', 'Consolas', monospace; }
+    .font-luxury { font-family: 'Cinzel', 'Montserrat', serif; letter-spacing: 0.15em; }
+
+    /* Monolith Ceramic Glass Card */
+    .ceramic-monolith {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-top: 1px solid var(--card-border-top);
+      border-radius: 8px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--card-shadow);
+      position: relative;
+    }
+
+    /* 18K Gold Accent Badges */
+    .gold-badge {
+      color: var(--gold-primary);
+      border: 1px solid var(--gold-border);
+      background: var(--gold-bg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .theme-toggle-btn {
+      background: var(--gold-bg);
+      border: 1px solid var(--gold-border);
+      color: var(--gold-primary);
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 8.5px;
+      font-family: 'Share Tech Mono', monospace;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* ========== 用户专属：翻页日历 · 小米MIX风格 · 白日历金字体 · 秒表百分秒 ========== */
+    .year-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+    .year-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(223, 186, 115, 0.25) 30%, rgba(223, 186, 115, 0.4) 70%, transparent 100%);
+    }
+    .year-value {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 5px;
+      color: var(--gold-primary);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      font-feature-settings: "tnum";
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .clock-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      gap: 8px;
+    }
+
+    /* 白色卡片日历 */
+    .calendar-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .calendar-title, .clock-title {
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .calendar-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .calendar-square {
+      background: var(--cal-square-bg);
+      border-radius: 6px;
+      padding: 6px 4px;
+      box-shadow: 0 8px 18px -4px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--cal-square-border) inset;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 66px;
+      height: 66px;
+      position: relative;
+    }
+    .calendar-square::before {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 15%;
+      right: 15%;
+      height: 1.5px;
+      background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.45), transparent);
+      border-radius: 1px;
+    }
+    .calendar-square::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 3px;
+      height: 3px;
+      background: rgba(212, 175, 55, 0.6);
+      border-radius: 50%;
+      box-shadow: -7px 0 0 rgba(212, 175, 55, 0.6), 7px 0 0 rgba(212, 175, 55, 0.6);
+    }
+    .calendar-square .flip-value {
+      font-size: 42px;
+      font-weight: 600;
+      letter-spacing: -1px;
+      background: var(--cal-gold-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      font-feature-settings: "tnum";
+      font-family: 'Share Tech Mono', monospace;
+      margin-top: 1px;
+      filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
+    }
+    .calendar-square .flip-label {
+      font-size: 7.5px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(184, 134, 11, 0.85);
+      margin-top: 2px;
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .calendar-footer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 3px;
+    }
+    .calendar-footer-dot {
+      width: 3.5px;
+      height: 3.5px;
+      background: rgba(212, 175, 55, 0.8);
+      border-radius: 50%;
+      box-shadow: 0 0 4px rgba(212, 175, 55, 0.4);
+    }
+    .calendar-footer-text {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      background: var(--cal-gold-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+      font-family: 'Share Tech Mono', monospace;
+      line-height: 1.2;
+    }
+
+    /* 时钟区域 */
+    .clock-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .clock-round-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .clock-round {
+      background: var(--clock-round-bg);
+      border-radius: 50%;
+      width: 66px;
+      height: 66px;
+      box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--clock-round-border) inset;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .clock-round::before {
+      content: '';
+      position: absolute;
+      top: 5px; left: 5px; right: 5px; bottom: 5px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      pointer-events: none;
+    }
+    .clock-round::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1.5px;
+      height: 3.5px;
+      background: rgba(223, 186, 115, 0.4);
+      border-radius: 1px;
+      box-shadow: 0 56px 0 rgba(223, 186, 115, 0.4), 28px 28px 0 -0.5px rgba(223, 186, 115, 0.2), -28px 28px 0 -0.5px rgba(223, 186, 115, 0.2);
+      pointer-events: none;
+    }
+    .clock-round .flip-value {
+      font-size: 35px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      color: var(--text-main);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      line-height: 1;
+      font-feature-settings: "tnum";
+      font-family: 'Share Tech Mono', monospace;
+      position: relative;
+      z-index: 2;
+    }
+    .clock-round .flip-label {
+      font-size: 7px;
+      font-weight: 400;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      margin-top: 1px;
+      font-family: 'Share Tech Mono', monospace;
+      position: relative;
+      z-index: 2;
+    }
+
+    .clock-colon {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+      margin: 0 1px;
+    }
+    .clock-colon span {
+      width: 3.5px;
+      height: 3.5px;
+      background: rgba(223, 186, 115, 0.6);
+      border-radius: 50%;
+      animation: softBlink 1.8s infinite;
+      box-shadow: 0 0 4px rgba(223, 186, 115, 0.3);
+    }
+    .clock-colon span:nth-child(2) { animation-delay: 0.9s; }
+    @keyframes softBlink {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    /* 秒表 + 百分秒组合 */
+    .second-section {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .second-round {
+      background: var(--clock-round-bg);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      box-shadow: 0 6px 12px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--clock-round-border) inset;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .second-round .flip-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-main);
+      line-height: 1;
+      font-feature-settings: "tnum";
+      font-family: 'Share Tech Mono', monospace;
+    }
+    .second-round .flip-label {
+      font-size: 6px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .centisecond-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+    }
+    .centisecond-value {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0;
+      font-feature-settings: "tnum";
+      font-family: 'Share Tech Mono', monospace;
+      background: var(--cal-gold-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      animation: centiBlink 0.12s infinite;
+    }
+    .centisecond-label {
+      font-size: 5.5px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(212, 175, 55, 0.65);
+      font-family: 'Share Tech Mono', monospace;
+    }
+    @keyframes centiBlink {
+      0% { opacity: 0.75; }
+      50% { opacity: 1; filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6)); }
+      100% { opacity: 0.75; }
+    }
+
+    .second-divider {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      align-items: center;
+      opacity: 0.5;
+    }
+    .second-divider span {
+      width: 2.5px;
+      height: 2.5px;
+      background: rgba(212, 175, 55, 0.6);
+      border-radius: 50%;
+    }
+
+    /* 16 根紧凑型垂直长方柱 (高度 64px) */
+    .monolith-pillar {
+      width: 9px;
+      height: 52px;
+      background: var(--pillar-track-bg);
+      border: 1px solid var(--pillar-border);
+      border-radius: 1.5px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: hidden;
+    }
+    .monolith-pillar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(0, 0, 0, 0.35) 4px, rgba(0, 0, 0, 0.35) 5.5px);
+      pointer-events: none;
+      z-index: 5;
+    }
+    .pillar-fluid {
+      width: 100%;
+      height: 20%;
+      transition: height 0.45s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.45s ease;
+      position: relative;
+    }
+    .pillar-fluid::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1.5px;
+      background: #ffffff;
+      box-shadow: 0 0 4px #ffffff;
+      z-index: 6;
+    }
+
+    .storage-track {
+      background: var(--pillar-track-bg);
+      border: 1px solid var(--pillar-border);
+      height: 5.5px;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+  
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 4px #00f0ff; }
+      50% { transform: scale(1.35); opacity: 1; box-shadow: 0 0 10px #00f0ff, 0 0 16px #00f0ff; }
+    }
+
+  </style>
+</head>
+<body class="p-1 select-none antialiased flex flex-col items-center justify-between h-screen max-h-screen overflow-hidden relative">
+
+  <!-- Ambient Background Canvas -->
+  <canvas id="ambient-canvas" class="fixed inset-0 w-full h-full pointer-events-none z-0"></canvas>
+
+  <!-- Global Shared Master Gradient -->
+  <svg width="0" height="0" class="absolute">
+    <defs>
+      <linearGradient id="monolith-master-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#0055ff" />
+        <stop offset="32%" stop-color="#00d8ff" />
+        <stop offset="68%" stop-color="#dfba73" />
+        <stop offset="100%" stop-color="#ff1e42" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- Outer Mix Chassis: Strictly Fitted to 1080x2040 Screen without vertical overflow -->
+  <div class="w-full max-w-[410px] h-full max-h-screen rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10 flex flex-col justify-between p-1.5">
+    
+    <!-- Unified Main Telemetry Cockpit (Tight 8px Gaps, No Gaping Voids) -->
+    <main class="relative z-10 flex-1 flex flex-col justify-start space-y-2 py-0.5 overflow-hidden">
+      
+      <!-- 1. TOP MASTER CARD: 拯救者身份 + 翻页日历 · 小米MIX风格 · 白日历金字体 · 秒表百分秒 -->
+      <div class="ceramic-monolith p-2 flex flex-col justify-between shrink-0">
+        <!-- Master Header Line (中英字体独立分离) -->
+        <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-1 mb-1.5">
+          <div class="flex items-center space-x-1.5 text-[10px] font-light whitespace-nowrap" style="color: var(--text-main);">
+            <span class="w-1.5 h-1.5 rounded-full shadow-[0_0_6px_var(--gold-primary)]" style="background: var(--gold-primary);"></span>
+            <span class="font-zh font-medium text-[9.5px] tracking-[0.08em]">拯救者</span>
+            <span class="font-en-luxury font-semibold text-[9.5px] tracking-[0.16em]" style="color: var(--gold-primary);">R7000</span>
+            <span class="font-en-tech text-[8px] pl-1.5 border-l border-[var(--card-border)]" style="color: var(--gold-primary);">
+              AMD R7 4800H
+            </span>
+          </div>
+          <div class="flex items-center space-x-1 shrink-0">
+            <span class="gold-badge text-[7px] px-1.5 py-0.5 rounded tracking-wider">
+              <span class="font-en-tech">16</span> <span class="font-zh text-[6.5px]">线程</span>
+            </span>
+            <button class="theme-toggle-btn" onclick="toggleTheme()" id="theme-btn" style="padding: 1px 5px; font-size: 7.5px;">
+              <span id="theme-icon">☼</span>
+              <span id="theme-label" class="font-zh">浅色</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 顶部年份金标横线 -->
+        <div class="year-header">
+          <span class="year-line"></span>
+          <span class="year-value" id="yearDisplay">2026</span>
+          <span class="year-line"></span>
+        </div>
+
+        <!-- 面板容器：日历（白卡片+金字） + 时钟（深色圆盘+秒表百分秒） -->
+        <div class="clock-panel">
+          <!-- ========== 日历区域 ========== -->
+          <div class="calendar-section">
+            
+            <div class="calendar-row">
+              <div class="calendar-square">
+                <div class="flip-value" id="monthDisplay">11</div>
+                
+              </div>
+              <div class="calendar-square">
+                <div class="flip-value" id="dayDisplay">10</div>
+                
+              </div>
+            </div>
+            <div class="calendar-footer">
+              <span class="calendar-footer-dot"></span>
+              <span class="calendar-footer-text font-zh" id="weekdayDisplay" style="font-family: var(--font-zh); letter-spacing: 0.16em;">星期二</span>
+              <span class="calendar-footer-dot"></span>
+            </div>
+          </div>
+
+          <!-- ========== 时钟区域 + 秒表 + 百分秒 ========== -->
+          <div class="clock-section">
+            
+            <div class="clock-round-group">
+              <div class="clock-round">
+                <div class="flip-value" id="hourDisplay">02</div>
+                
+              </div>
+              <div class="clock-colon">
+                <span></span>
+                <span></span>
+              </div>
+              <div class="clock-round">
+                <div class="flip-value" id="minuteDisplay">36</div>
+                
+              </div>
+            </div>
+            <!-- 秒表 + 百分秒 (100fps 闪动) -->
+            <div class="second-section">
+              <div class="second-divider">
+                <span></span>
+                <span></span>
+              </div>
+              <div class="second-round">
+                <div class="flip-value" id="secondDisplay">08</div>
+                
+              </div>
+              <!-- 百分之一秒显示 -->
+              <div class="centisecond-display">
+                <div class="centisecond-value" id="centisecondDisplay">42</div>
+                
+              </div>
+              <div class="second-divider">
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部微距信息线 -->
+        <div class="flex justify-between items-center px-1 pt-1 mt-1 border-t border-[var(--card-border)] text-[7px] font-mono-tech">
+          <span style="color: var(--text-sub);"><span class="font-zh">系统运行:</span> <span style="color: var(--text-main);" id="host-uptime-display"><span class="font-en-tech">--</span><span class="font-zh">小时 </span><span class="font-en-tech">--</span><span class="font-zh">分</span></span></span>
+          <span style="color: var(--gold-primary);"><span class="font-zh">拯救者</span> <span class="font-en-luxury font-medium">R7000</span> <span class="font-zh">· 桌面副屏</span></span>
+        </div>
+      </div>
+
+      <!-- 2. CPU MONOLITH ARRAY (紧致硬核 · 消除下部虚空) -->
+      <div class="ceramic-monolith p-2 flex flex-col justify-between shrink-0">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-1 mb-1">
+          <div class="flex items-center space-x-1.5 text-[10px] font-light truncate mr-1" style="color: var(--text-main);">
+            <span style="color: var(--gold-primary);">◆</span>
+            <span><span class="font-en-tech font-bold" style="color: var(--gold-primary);">CPU</span> <span class="font-zh font-medium">处理器</span></span>
+          </div>
+          <span class="text-[7.5px] tracking-wider" style="color: var(--gold-primary);">
+            <span class="font-en-tech">8</span> <span class="font-zh text-[6.5px]">核</span> · <span class="font-en-tech">16</span> <span class="font-zh text-[6.5px]">线程</span>
+          </span>
+        </div>
+
+        <!-- Symmetrical 3-Section: 8 Pillars | Center Ring | 8 Pillars -->
+        <div class="flex items-center justify-between px-1">
+          <!-- LEFT 8 PILLARS -->
+          <div class="flex flex-col items-center">
+            <div class="flex items-end space-x-1" id="left-core-pillars">
+              <!-- Injected 8 pillars -->
+            </div>
+            <div class="flex justify-between w-full mt-0.5 px-0.5 text-[6.5px] font-mono-tech" style="color: var(--text-sub);">
+              <span>01</span>
+              <span>08</span>
+            </div>
+          </div>
+
+          <!-- CENTER RING (Compact 70px) -->
+          <div class="relative flex items-center justify-center mx-1">
+            <svg class="w-18 h-18 -rotate-90" style="width: 70px; height: 70px;">
+              <circle cx="35" cy="35" r="27" stroke="rgba(128,128,128,0.12)" stroke-width="4.5" fill="none"></circle>
+              <circle id="cpu-ring" cx="35" cy="35" r="27" 
+                      stroke="url(#monolith-master-gradient)" stroke-width="4.5" fill="none"
+                      stroke-dasharray="169.6" stroke-dashoffset="125" stroke-linecap="round"
+                      class="transition-all duration-500"></circle>
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none text-center">
+              <div class="flex items-baseline justify-center">
+                <span class="font-mono-tech text-2xl font-light transition-colors duration-400 leading-none" id="cpu-val">23</span>
+                <span class="text-[10px] font-mono-tech font-light ml-0.5" style="color: var(--text-sub);">%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT 8 PILLARS -->
+          <div class="flex flex-col items-center">
+            <div class="flex items-end space-x-1" id="right-core-pillars">
+              <!-- Injected 8 pillars -->
+            </div>
+            <div class="flex justify-between w-full mt-0.5 px-0.5 text-[6.5px] font-mono-tech" style="color: var(--text-sub);">
+              <span>09</span>
+              <span>16</span>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+
+      <!-- 3. GPU COMBAT CORE (紧致硬核 · 消除下部虚空) -->
+      <div class="ceramic-monolith p-2 flex flex-col justify-between shrink-0">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-1 mb-1">
+          <div class="flex items-center space-x-1.5 text-[10px] font-light tracking-wider truncate mr-1">
+            <!-- Official NVIDIA Green Corporate Logo -->
+            <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" style="filter: drop-shadow(0 0 4px rgba(118, 185, 0, 0.6));">
+              <path fill="#76B900" d="M8.948 8.798v-1.43a6.7 6.7 0 0 1 .424-.018c3.922-.124 6.493 3.374 6.493 3.374s-2.774 3.851-5.75 3.851c-.398 0-.787-.062-1.158-.185v-4.346c1.528.185 1.837.857 2.747 2.385l2.04-1.714s-1.492-1.952-4-1.952a6.016 6.016 0 0 0-.796.035m0-4.735v2.138l.424-.027c5.45-.185 9.01 4.47 9.01 4.47s-4.08 4.964-8.33 4.964c-.37 0-.733-.035-1.095-.097v1.325c.3.035.61.062.91.062 3.957 0 6.82-2.023 9.593-4.408.459.371 2.34 1.263 2.73 1.652-2.633 2.208-8.772 3.984-12.253 3.984-.335 0-.653-.018-.971-.053v1.864H24V4.063zm0 10.326v1.131c-3.657-.654-4.673-4.46-4.673-4.46s1.758-1.944 4.673-2.262v1.237H8.94c-1.528-.186-2.73 1.245-2.73 1.245s.68 2.412 2.739 3.11M2.456 10.9s2.164-3.197 6.5-3.533V6.201C4.153 6.59 0 10.653 0 10.653s2.35 6.802 8.948 7.42v-1.237c-4.84-.6-6.492-5.936-6.492-5.936z"/>
+            </svg>
+            <span class="font-luxury font-medium tracking-[0.14em]" style="color: #76B900; text-shadow: 0 0 6px rgba(118, 185, 0, 0.4);">NVIDIA</span>
+          </div>
+          <span class="gold-badge text-[8px] px-1.5 py-0.5 rounded font-mono-tech tracking-wider">
+            <span class="font-en-tech">RTX 2060 · 6G</span> <span class="font-zh text-[6.5px]">显存</span>
+          </span>
+        </div>
+
+        <!-- GPU 核心遥测：优化排版 (GPU负载 4/12 | 显存实体饼图 5/12 | 功耗温度紧凑靠右 3/12) -->
+        <div class="grid grid-cols-12 gap-1 items-center my-0.5">
+          
+          <!-- 分栏 1 (4/12): GPU 负载 (Compute Load Ring) -->
+          <div class="col-span-4 flex flex-col items-center justify-center border-r border-[var(--card-border)] pr-1">
+            <div class="relative flex items-center justify-center">
+              <svg class="w-14 h-14 -rotate-90" style="width: 56px; height: 56px;">
+                <circle cx="28" cy="28" r="22" stroke="rgba(128,128,128,0.12)" stroke-width="4" fill="none"></circle>
+                <circle id="gpu-ring" cx="28" cy="28" r="22" 
+                        stroke="url(#monolith-master-gradient)" stroke-width="4" fill="none"
+                        stroke-dasharray="138.2" stroke-dashoffset="120" stroke-linecap="round"
+                        class="transition-all duration-500"></circle>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center pointer-events-none text-center">
+                <div class="flex items-baseline justify-center">
+                  <span class="font-mono-tech text-xl font-light transition-colors duration-400 leading-none" id="gpu-val">6</span>
+                  <span class="text-[9px] font-mono-tech font-light ml-0.5" style="color: var(--text-sub);">%</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-[7.5px] font-zh mt-1 tracking-wider" style="color: var(--text-sub);">GPU 负载</div>
+          </div>
+
+          <!-- 分栏 2 (5/12): 显存占用 (Solid Filled Pie Chart, 空间扩增) -->
+          <div class="col-span-5 flex flex-col items-center justify-center border-r border-[var(--card-border)] px-1">
+            <!-- 实体填充饼图 -->
+            <div class="relative w-11 h-11 shrink-0 rounded-full flex items-center justify-center" style="box-shadow: 0 0 10px rgba(118, 185, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.14);">
+              <div id="vram-pie" class="w-full h-full rounded-full transition-all duration-500" style="background: conic-gradient(#76B900 0deg, #00f0ff 87deg, rgba(255,255,255,0.06) 87deg 360deg);"></div>
+              <!-- 极细中心枢轴微点 -->
+              <div class="absolute w-1.5 h-1.5 rounded-full bg-black/90 border border-white/50 pointer-events-none"></div>
+            </div>
+            
+            <div class="flex items-center space-x-1 mt-1 text-[7.5px] leading-tight">
+              <span class="font-zh" style="color: var(--text-sub);">显存占用</span>
+              <span class="font-en-tech font-bold text-[#76B900]" id="vram-pct">24%</span>
+            </div>
+            <div class="text-[7.5px] font-en-tech font-light whitespace-nowrap mt-0.5" style="color: var(--text-main);" id="vram-text">
+              1472 / 6144 MB
+            </div>
+          </div>
+
+          <!-- 分栏 3 (3/12): 功耗与温度 (紧密贴合·压缩靠右) -->
+          <div class="col-span-3 flex flex-col justify-center space-y-1.5 pl-0.5">
+            <!-- 功耗胶囊 (文字与数字紧密相邻·居右对齐) -->
+            <div class="px-1.5 py-1 rounded border border-[var(--card-border)] flex items-center justify-center space-x-1.5" style="background: var(--capsule-bg);">
+              <span class="text-[6.5px] font-zh" style="color: var(--text-sub);">功耗</span>
+              <span class="text-[9px] font-en-tech font-light" style="color: var(--text-main);" id="power-text">24.0 W</span>
+            </div>
+            <!-- 温度胶囊 (文字与数字紧密相邻·居右对齐) -->
+            <div class="px-1.5 py-1 rounded border border-[var(--card-border)] flex items-center justify-center space-x-1.5" style="background: var(--capsule-bg);">
+              <span class="text-[6.5px] font-zh" style="color: var(--text-sub);">温度</span>
+              <span class="text-[9px] font-en-tech font-light text-emerald-400" id="temp-text">48 °C</span>
+            </div>
+          </div>
+
+        </div>
+
+
+      </div>
+
+      <!-- 4. 内存与存储 (双通道内存 + 双 NVMe 固态硬盘) -->
+      <div class="ceramic-monolith p-2 flex flex-col justify-between shrink-0">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-[var(--card-border)] pb-1 mb-1">
+          <div class="flex items-center space-x-1.5 text-[10px] font-light truncate mr-1" style="color: var(--text-main);">
+            <span style="color: var(--gold-primary);">◆</span>
+            <span class="font-zh font-medium">内存与存储</span>
+          </div>
+          <span class="gold-badge text-[7.5px] px-1.5 py-0.5 rounded tracking-wider">
+            <span class="font-en-tech">16GB</span> <span class="font-zh text-[6.5px]">内存</span> · <span class="font-en-tech">2.5TB</span> <span class="font-zh text-[6.5px]">固态</span>
+          </span>
+        </div>
+
+        <div class="grid grid-cols-12 gap-2 items-center">
+          <!-- LEFT: 16GB Dual DDR4 RAM Ring (5 Cols) -->
+          <div class="col-span-5 flex flex-col items-center justify-center border-r border-[var(--card-border)] pr-1">
+            <div class="relative flex items-center justify-center">
+              <svg class="w-16 h-16 -rotate-90" style="width: 60px; height: 60px;">
+                <circle cx="33" cy="33" r="25" stroke="rgba(128,128,128,0.12)" stroke-width="4.5" fill="none"></circle>
+                <circle id="ram-ring" cx="33" cy="33" r="25" 
+                        stroke="url(#monolith-master-gradient)" stroke-width="4.5" fill="none"
+                        stroke-dasharray="157.1" stroke-dashoffset="45" stroke-linecap="round"
+                        class="transition-all duration-500"></circle>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center pointer-events-none text-center">
+                <div class="flex items-baseline justify-center">
+                  <span class="font-mono-tech text-2xl font-light transition-colors duration-400 leading-none" id="ram-val">71</span>
+                  <span class="text-[10px] font-mono-tech font-light ml-0.5" style="color: var(--text-sub);">%</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex justify-between w-full px-1 mt-0.5 text-[7px] font-mono-tech">
+              <span style="color: var(--text-main);" id="ram-used">10.9 GB</span>
+              <span style="color: var(--text-sub);" id="ram-free">4.5 GB</span>
+            </div>
+          </div>
+
+          <!-- RIGHT: NVMe Solid State Drives (7 Cols) -->
+          <div class="col-span-7 space-y-1 pl-0.5">
+            <!-- Drive C: System NVMe -->
+            <div>
+              <div class="flex justify-between text-[7.5px] font-mono-tech mb-0.5">
+                <span style="color: var(--text-main);" class="font-medium"><span class="font-en-tech font-bold">C:</span> <span class="font-zh">系统盘</span> <span class="text-[6px]" style="color: var(--gold-primary);">[NVMe]</span></span>
+                <span class="font-light" id="disk-c-text" style="color: var(--text-sub);">349.7 / 476 GB</span>
+              </div>
+              <div class="storage-track">
+                <div id="disk-c-bar" class="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-[#dfba73] transition-all duration-500 rounded-full" style="width: 73.5%;"></div>
+              </div>
+            </div>
+
+            <!-- Drive D: Storage NVMe -->
+            <div>
+              <div class="flex justify-between text-[7.5px] font-mono-tech mb-0.5">
+                <span style="color: var(--text-main);" class="font-medium"><span class="font-en-tech font-bold">D:</span> <span class="font-zh">数据盘</span> <span class="text-[6px]" style="color: var(--gold-primary);">[2TB]</span></span>
+                <span class="font-light" id="disk-d-text" style="color: var(--text-sub);">1.22 / 1.86 TB</span>
+              </div>
+              <div class="storage-track">
+                <div id="disk-d-bar" class="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-[#dfba73] transition-all duration-500 rounded-full" style="width: 65.7%;"></div>
+              </div>
+            </div>
+
+            <!-- SSH Link Status -->
+            <div class="flex justify-between items-center pt-0.5 border-t border-[var(--card-border)] text-[7.5px] font-mono-tech whitespace-nowrap">
+              <span style="color: var(--text-sub);"><span class="font-zh">主机连接:</span></span>
+              <span class="font-light font-en-tech" style="color: var(--gold-primary);" id="ssh-link-text">SSH : 22 (8ms <span class="font-zh">在线</span>)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- 5. 科技感 3D 波浪网格动态声控底栏 (3D Cyber Wireframe Mesh Wave · Audio Reactive) -->
+    <footer class="relative z-10 px-3 py-1 border-t border-purple-500/30 flex items-center justify-between text-[7px] font-mono-tech shrink-0 overflow-hidden rounded-b-xl" style="height: 48px; background: #050409; box-shadow: 0 -4px 20px rgba(168, 85, 247, 0.18);">
+      <!-- 3D 科技感波浪网格动态画布 (随环境音起伏) -->
+      <canvas id="wave-mesh-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-0"></canvas>
+      
+      <!-- 浮于声控网格之上的高级质感铭牌 (DESIGN FOR MIX) -->
+      <div class="relative z-10 flex items-center space-x-1.5 font-luxury tracking-[0.26em] font-medium" style="color: #f472b6; text-shadow: 0 0 12px rgba(244, 114, 182, 0.7);">
+        <span class="inline-block w-1.5 h-1.5 rounded-full bg-pink-400 shadow-[0_0_8px_#ec4899] animate-pulse"></span>
+        <span class="font-en-luxury font-medium tracking-[0.26em]" style="color: #fbcfe8;">DESIGN FOR MIX</span>
+        <span class="text-purple-400 opacity-80 text-[6px]">✦</span>
+      </div>
+      
+      <div class="relative z-10 flex items-center space-x-1.5 tracking-[0.16em] uppercase font-mono-tech">
+        <!-- 麦克风环境声波联动状态指示 -->
+        <div class="flex items-center space-x-1 px-1.5 py-0.5 rounded border border-purple-500/40 text-[6px] text-pink-300 shadow-[0_0_8px_rgba(236,72,153,0.25)]" style="background: rgba(168, 85, 247, 0.15);" id="mic-status-badge">
+          <span class="inline-block w-1 h-1 rounded-full bg-pink-400 animate-ping"></span>
+          <span>AUDIO RX</span>
+        </div>
+        <span class="font-mono-tech text-[7px] text-purple-300 font-medium" id="footer-edition-text">MONOLITH R7000</span>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    // --- 1. Symmetrical Dual-Theme Switching ---
+    let isDarkMode = true;
+
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      document.body.classList.toggle('theme-light', !isDarkMode);
+      
+      const themeBtn = document.getElementById('theme-btn');
+      const themeIcon = document.getElementById('theme-icon');
+      const themeLabel = document.getElementById('theme-label');
+      const footerEdition = document.getElementById('footer-edition-text');
+
+      if (isDarkMode) {
+        themeIcon.innerText = '☼';
+        themeLabel.innerText = '浅色';
+        footerEdition.innerText = '极客桌面副屏';
+      } else {
+        themeIcon.innerText = '☽';
+        themeLabel.innerText = '深色';
+        footerEdition.innerText = 'WHITE JADE CERAMIC EDITION · ALABASTER REFRACTION';
+      }
+      initParticles();
+    }
+
+    // --- 2. 用户专属：高频秒表 + 百分秒 (requestAnimationFrame 100fps) + 3D 翻转时钟 ---
+    (function() {
+      const yearEl = document.getElementById('yearDisplay');
+      const monthEl = document.getElementById('monthDisplay');
+      const dayEl = document.getElementById('dayDisplay');
+      const weekdayEl = document.getElementById('weekdayDisplay');
+      const hourEl = document.getElementById('hourDisplay');
+      const minuteEl = document.getElementById('minuteDisplay');
+      const secondEl = document.getElementById('secondDisplay');
+      const centisecondEl = document.getElementById('centisecondDisplay');
+      const uptimeEl = document.getElementById('host-uptime-display');
+
+      const padZero = (num) => String(num).padStart(2, '0');
+      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+      let prevYear = '';
+      let prevMonth = '';
+      let prevDay = '';
+      let prevWeekday = '';
+      let prevHour = '';
+      let prevMinute = '';
+      let prevSecond = '';
+      let prevCenti = '';
+      const bootTime = Date.now() - (14 * 3600 + 42 * 60) * 1000;
+
+      function updateHighFrequency() {
+        const now = new Date();
+        const centi = Math.floor(now.getMilliseconds() / 10);
+        const centiStr = padZero(centi);
+        
+        if (centiStr !== prevCenti) {
+          centisecondEl.textContent = centiStr;
+          prevCenti = centiStr;
+        }
+        
+        const second = padZero(now.getSeconds());
+        if (second !== prevSecond) {
+          secondEl.textContent = second;
+          prevSecond = second;
+        }
+        
+        requestAnimationFrame(updateHighFrequency);
+      }
+
+      function formatUptimeHtml(sec) {
+        if (!sec || sec < 0) sec = 0;
+        const d = Math.floor(sec / 86400);
+        const h = Math.floor((sec % 86400) / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        if (d > 0) {
+          return `<span class="font-en-tech">${d}</span><span class="font-zh">天 </span><span class="font-en-tech">${h}</span><span class="font-zh">小时 </span><span class="font-en-tech">${m}</span><span class="font-zh">分</span>`;
+        } else {
+          return `<span class="font-en-tech">${h}</span><span class="font-zh">小时 </span><span class="font-en-tech">${m}</span><span class="font-zh">分</span>`;
+        }
+      }
+      window.formatUptimeHtml = formatUptimeHtml;
+
+      function updateFlipClock() {
+        const now = new Date();
+        const year = String(now.getFullYear());
+        const month = padZero(now.getMonth() + 1);
+        const day = padZero(now.getDate());
+        const weekday = weekdays[now.getDay()];
+        const hour = padZero(now.getHours());
+        const minute = padZero(now.getMinutes());
+
+        if (year !== prevYear) { animateFlip(yearEl, year, prevYear); prevYear = year; }
+        if (month !== prevMonth) { animateFlip(monthEl, month, prevMonth); prevMonth = month; }
+        if (day !== prevDay) { animateFlip(dayEl, day, prevDay); prevDay = day; }
+        if (weekday !== prevWeekday) { weekdayEl.textContent = weekday; prevWeekday = weekday; }
+        if (hour !== prevHour) { animateFlip(hourEl, hour, prevHour); prevHour = hour; }
+        if (minute !== prevMinute) { animateFlip(minuteEl, minute, prevMinute); prevMinute = minute; }
+
+        if (uptimeEl) {
+          const sec = window.hostBootEpoch 
+            ? Math.floor((Date.now() - window.hostBootEpoch) / 1000)
+            : Math.floor((Date.now() - bootTime) / 1000);
+          uptimeEl.innerHTML = formatUptimeHtml(sec);
+        }
+      }
+
+      function animateFlip(element, newValue, oldValue) {
+        if (!element) return;
+        if (oldValue === '') {
+          element.textContent = newValue;
+          return;
+        }
+        element.textContent = newValue;
+        if (element.animate) {
+          element.animate(
+            [
+              { transform: 'perspective(600px) rotateX(0deg)', offset: 0 },
+              { transform: 'perspective(600px) rotateX(-15deg)', offset: 0.3 },
+              { transform: 'perspective(600px) rotateX(0deg)', offset: 0.6 },
+              { transform: 'perspective(600px) rotateX(0deg)', offset: 1 }
+            ],
+            { duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'none' }
+          );
+        }
+      }
+
+      function initDisplay() {
+        const now = new Date();
+        yearEl.textContent = String(now.getFullYear());
+        monthEl.textContent = padZero(now.getMonth() + 1);
+        dayEl.textContent = padZero(now.getDate());
+        weekdayEl.textContent = weekdays[now.getDay()];
+        hourEl.textContent = padZero(now.getHours());
+        minuteEl.textContent = padZero(now.getMinutes());
+        secondEl.textContent = padZero(now.getSeconds());
+        centisecondEl.textContent = padZero(Math.floor(now.getMilliseconds() / 10));
+
+        prevYear = yearEl.textContent;
+        prevMonth = monthEl.textContent;
+        prevDay = dayEl.textContent;
+        prevWeekday = weekdayEl.textContent;
+        prevHour = hourEl.textContent;
+        prevMinute = minuteEl.textContent;
+        prevSecond = secondEl.textContent;
+        prevCenti = centisecondEl.textContent;
+      }
+
+      initDisplay();
+      setInterval(updateFlipClock, 500);
+      updateHighFrequency();
+    })();
+
+    // --- 3. Ambient Particle Canvas: Cosmic Stars (Dark) vs Ceramic Dust (Light) ---
+    const canvas = document.getElementById('ambient-canvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function initParticles() {
+      particles = [];
+      const count = isDarkMode ? 40 : 25;
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * (isDarkMode ? 1.3 : 1.8) + 0.4,
+          vx: (Math.random() - 0.5) * 0.15,
+          vy: (Math.random() - 0.5) * 0.15,
+          alpha: Math.random() * (isDarkMode ? 0.7 : 0.4) + 0.15,
+          dAlpha: (Math.random() * 0.008 + 0.003) * (Math.random() > 0.5 ? 1 : -1)
+        });
+      }
+    }
+    initParticles();
+
+    function renderParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const colorBase = isDarkMode ? '223, 186, 115' : '120, 145, 180';
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha += p.dAlpha;
+        if (p.alpha <= 0.05 || p.alpha >= 0.8) p.dAlpha = -p.dAlpha;
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${colorBase}, ${p.alpha})`;
+        ctx.fill();
+      });
+      requestAnimationFrame(renderParticles);
+    }
+    renderParticles();
+
+    // --- 4. 0~100% Unified Blue-to-Red Dynamic Color Spectrum ---
+    function getMonolithSpectrum(pct) {
+      const p = Math.max(0, Math.min(100, pct));
+      let r, g, b;
+      if (p <= 30) {
+        const factor = p / 30;
+        r = Math.round(0);
+        g = Math.round(85 + factor * 131);
+        b = Math.round(255);
+      } else if (p <= 65) {
+        const factor = (p - 30) / 35;
+        r = Math.round(0 + factor * 223);
+        g = Math.round(216 - factor * 30);
+        b = Math.round(255 - factor * 140);
+      } else {
+        const factor = (p - 65) / 35;
+        r = Math.round(223 + factor * 32);
+        g = Math.round(186 - factor * 156);
+        b = Math.round(115 - factor * 49);
+      }
+      return {
+        color: `rgb(${r}, ${g}, ${b})`,
+        shadow: `0 0 8px rgba(${r}, ${g}, ${b}, 0.65)`
+      };
+    }
+
+    // --- 5. Generate 16 Logical Core Pillars (8 Left, 8 Right) ---
+    const leftPillarsEl = document.getElementById('left-core-pillars');
+    const rightPillarsEl = document.getElementById('right-core-pillars');
+
+    function createPillar(idx) {
+      const p = document.createElement('div');
+      p.className = 'monolith-pillar';
+      p.id = `pillar-${idx}`;
+      p.innerHTML = `<div class="pillar-fluid" id="pillar-fill-${idx}" style="height: 15%; background-color: rgb(0, 150, 255);"></div>`;
+      return p;
+    }
+
+    for (let i = 0; i < 8; i++) {
+      leftPillarsEl.appendChild(createPillar(i));
+    }
+    for (let i = 8; i < 16; i++) {
+      rightPillarsEl.appendChild(createPillar(i));
+    }
+
+    function updatePillarFill(coreIndex, pct) {
+      const fill = document.getElementById(`pillar-fill-${coreIndex}`);
+      if (!fill) return;
+
+      const p = Math.max(4, Math.min(100, Math.round(pct)));
+      fill.style.height = `${p}%`;
+      const col = getMonolithSpectrum(p);
+      fill.style.backgroundColor = col.color;
+      fill.style.boxShadow = col.shadow;
+    }
+
+    // --- 6. Sparklines ---
+    const cpuHistory = new Array(30).fill(23);
+    const gpuHistory = new Array(30).fill(6);
+
+    function drawSparkline(canvasId, history, color) {
+      const cvs = document.getElementById(canvasId);
+      if (!cvs) return;
+      const c = cvs.getContext('2d');
+      const w = cvs.width = cvs.offsetWidth;
+      const h = cvs.height = cvs.offsetHeight;
+      c.clearRect(0, 0, w, h);
+
+      c.beginPath();
+      const step = w / (history.length - 1);
+      history.forEach((val, i) => {
+        const norm = Math.max(0, Math.min(100, val)) / 100;
+        const y = h - (norm * (h - 3)) - 1.5;
+        if (i === 0) c.moveTo(0, y);
+        else c.lineTo(i * step, y);
+      });
+      c.strokeStyle = color;
+      c.lineWidth = 1.3;
+      c.stroke();
+    }
+
+    const ringCirc70 = 169.6; // 2 * PI * 27
+    const ringCirc66 = 157.1; // 2 * PI * 25
+
+    function renderMetrics(totalCpu, coreArray, gpu, vramMB, tempC, powerW, ramPct, diskC, diskD) {
+      // 1. CPU
+      document.getElementById('cpu-ring').style.strokeDashoffset = ringCirc70 - (totalCpu / 100) * ringCirc70;
+      const cpuSpec = getMonolithSpectrum(totalCpu);
+      const cpuValEl = document.getElementById('cpu-val');
+      cpuValEl.innerText = Math.round(totalCpu);
+      cpuValEl.style.color = cpuSpec.color;
+      cpuValEl.style.textShadow = isDarkMode ? cpuSpec.shadow : 'none';
+      document.getElementById('cpu-ring').style.filter = `drop-shadow(${cpuSpec.shadow})`;
+
+      for (let i = 0; i < 16; i++) {
+        updatePillarFill(i, coreArray[i]);
+      }
+      cpuHistory.push(totalCpu);
+      cpuHistory.shift();
+      drawSparkline('cpu-wave', cpuHistory, cpuSpec.color);
+
+      // 2. GPU
+      const ringCircGpu = 138.2;
+      document.getElementById('gpu-ring').style.strokeDashoffset = ringCircGpu - (gpu / 100) * ringCircGpu;
+      const gpuSpec = getMonolithSpectrum(gpu);
+      const gpuValEl = document.getElementById('gpu-val');
+      gpuValEl.innerText = Math.round(gpu);
+      gpuValEl.style.color = gpuSpec.color;
+      gpuValEl.style.textShadow = isDarkMode ? gpuSpec.shadow : 'none';
+      document.getElementById('gpu-ring').style.filter = `drop-shadow(${gpuSpec.shadow})`;
+
+      gpuHistory.push(gpu);
+      gpuHistory.shift();
+      drawSparkline('gpu-wave', gpuHistory, gpuSpec.color);
+
+      // VRAM & Power & Temp
+            // 显存实体饼图与功耗温度实时遥测
+      const vramMBVal = Math.round(vramMB);
+      const vramPctVal = Math.min(100, Math.max(0, (vramMBVal / 6144) * 100));
+      const vramDegVal = (vramPctVal / 100) * 360;
+
+      const vramTextEl = document.getElementById('vram-text');
+      if (vramTextEl) vramTextEl.innerText = `${vramMBVal} / 6144 MB`;
+
+      const vramPctEl = document.getElementById('vram-pct');
+      if (vramPctEl) vramPctEl.innerText = `${Math.round(vramPctVal)}%`;
+
+      const vramPieEl = document.getElementById('vram-pie');
+      if (vramPieEl) {
+        vramPieEl.style.background = `conic-gradient(#76B900 0deg, #00f0ff ${vramDegVal}deg, rgba(255, 255, 255, 0.08) ${vramDegVal}deg 360deg)`;
+      }
+      document.getElementById('power-text').innerText = `${powerW.toFixed(1)} W`;
+      document.getElementById('temp-text').innerText = `${Math.round(tempC)} °C`;
+
+      // 3. RAM
+      document.getElementById('ram-ring').style.strokeDashoffset = ringCirc66 - (ramPct / 100) * ringCirc66;
+      const ramSpec = getMonolithSpectrum(ramPct);
+      const ramValEl = document.getElementById('ram-val');
+      ramValEl.innerText = Math.round(ramPct);
+      ramValEl.style.color = ramSpec.color;
+      ramValEl.style.textShadow = isDarkMode ? ramSpec.shadow : 'none';
+      document.getElementById('ram-ring').style.filter = `drop-shadow(${ramSpec.shadow})`;
+
+      const ramUsedEl = document.getElementById('ram-used');
+      const ramFreeEl = document.getElementById('ram-free');
+      if (ramUsedEl && ramFreeEl) {
+        const u = ((ramPct / 100) * 15.37).toFixed(1);
+        const f = Math.max(0, 15.37 - parseFloat(u)).toFixed(1);
+        ramUsedEl.innerText = `${u} GB`;
+        ramFreeEl.innerText = `${f} GB`;
+      }
+
+      // 4. Disks
+      if (diskC) {
+        document.getElementById('disk-c-bar').style.width = `${Math.min(100, (diskC.used / diskC.total) * 100)}%`;
+        document.getElementById('disk-c-text').innerText = `${diskC.used.toFixed(1)} / ${diskC.total.toFixed(0)} GB`;
+      }
+      if (diskD) {
+        document.getElementById('disk-d-bar').style.width = `${Math.min(100, (diskD.used / diskD.total) * 100)}%`;
+        document.getElementById('disk-d-text').innerText = `${(diskD.used / 1024).toFixed(2)} / ${(diskD.total / 1024).toFixed(2)} TB`;
+      }
+    }
+
+    // --- 7. Live Bridge from Android SSH Probe ---
+    let isLiveFromAndroid = false;
+    window.updateFromAndroid = function(raw) {
+      try {
+        if (!raw || !raw.includes('|')) return;
+        const parts = raw.trim().split('|');
+        if (parts.length < 5) return;
+        isLiveFromAndroid = true;
+        const totalCpu = parseFloat(parts[0]) || 0;
+        const coreArray = parts[1].split(',').map(s => parseFloat(s.trim()) || 0);
+        const freeRamKB = parseFloat(parts[2]) || 0;
+        const totalRamKB = parseFloat(parts[3]) || 1;
+        const ramPct = Math.min(100, Math.max(0, ((totalRamKB - freeRamKB) / totalRamKB) * 100));
+        
+        const gpuParts = parts[4].split(',').map(s => parseFloat(s.trim()) || 0);
+        const gpuUtil = gpuParts[0] || 0;
+        const vramUsed = gpuParts[1] || 0;
+        const tempC = gpuParts[3] || 45;
+        const powerW = gpuParts[4] || 20;
+
+        let diskC = { used: 349.7, total: 475.7 };
+        let diskD = { used: 1253.7, total: 1907.7 };
+        if (parts.length >= 6 && parts[5]) {
+          const hostSec = parseInt(parts[5].trim(), 10);
+          if (!isNaN(hostSec) && hostSec > 0) {
+            window.hostBootEpoch = Date.now() - hostSec * 1000;
+            const uptimeEl = document.getElementById('host-uptime-display');
+            if (uptimeEl && window.formatUptimeHtml) {
+              uptimeEl.innerHTML = window.formatUptimeHtml(hostSec);
+            }
+          }
+        }
+
+        renderMetrics(totalCpu, coreArray, gpuUtil, vramUsed, tempC, powerW, ramPct, diskC, diskD);
+
+        const ramUsedEl = document.getElementById('ram-used');
+        const ramFreeEl = document.getElementById('ram-free');
+        if (ramUsedEl && ramFreeEl && totalRamKB > 0) {
+          ramUsedEl.innerText = `${((totalRamKB - freeRamKB) / 1048576).toFixed(1)} GB`;
+          ramFreeEl.innerText = `${(freeRamKB / 1048576).toFixed(1)} GB`;
+        }
+        const sshLinkEl = document.getElementById('ssh-link-text');
+        if (sshLinkEl) {
+          sshLinkEl.innerHTML = 'SSH : 22 (8ms <span class="font-zh">在线</span>)';
+        }
+      } catch(e) {
+        console.error('Android parse error:', e);
+      }
+    };
+
+    // Simulation Fallback
+    let simCpu = 23;
+    let simGpu = 6;
+    let simVram = 1478;
+    let simTemp = 48;
+    let simPower = 24.0;
+    let simRam = 71;
+    let simCoreLoads = [18, 25, 40, 12, 33, 55, 20, 8, 14, 28, 45, 10, 22, 38, 15, 6];
+
+    setInterval(() => {
+      if (isLiveFromAndroid) return;
+      simCpu = Math.max(6, Math.min(94, simCpu + (Math.random() * 8 - 4)));
+      for (let i = 0; i < 16; i++) {
+        simCoreLoads[i] = Math.max(4, Math.min(100, simCpu + (Math.random() * 26 - 13)));
+      }
+      simGpu = Math.max(3, Math.min(95, simGpu + (Math.random() * 6 - 3)));
+      simVram = Math.max(1300, Math.min(5800, simVram + (Math.random() * 20 - 10)));
+      simTemp = Math.max(42, Math.min(76, simTemp + (Math.random() * 0.4 - 0.2)));
+      simPower = Math.max(18, Math.min(78, (simGpu / 100) * 58 + 20 + (Math.random() * 1.5)));
+      simRam = Math.max(40, Math.min(88, simRam + (Math.random() * 0.6 - 0.3)));
+
+      renderMetrics(
+        simCpu,
+        simCoreLoads,
+        simGpu,
+        simVram,
+        simTemp,
+        simPower,
+        simRam,
+        { used: 349.7 + Math.sin(Date.now() / 10000) * 0.2, total: 475.7 },
+        { used: 1253.7 + Math.cos(Date.now() / 10000) * 0.3, total: 1907.7 }
+      );
+    }, 1200);
+
+    // Initial render
+    renderMetrics(
+      simCpu,
+      simCoreLoads,
+      simGpu,
+      simVram,
+      simTemp,
+      simPower,
+      simRam,
+      { used: 349.7, total: 475.7 },
+      { used: 1253.7, total: 1907.7 }
+    );
+  
+    // --- 5. 底部科技感 3D 波浪网格动态声控引擎 (3D Cyber Wireframe Mesh Audio-Reactive Engine) ---
+    (function initWaveMeshEngine() {
+      const canvas = document.getElementById('wave-mesh-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let w = 0, h = 0;
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        w = canvas.width = rect.width || window.innerWidth;
+        h = canvas.height = rect.height || 48;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      // --- 麦克风环境音量采集与平滑处理 ---
+      let audioLevel = 0.2;
+      let smoothAudio = 0.2;
+      let isMicConnected = false;
+
+      function setupMicrophone() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            .then(stream => {
+              isMicConnected = true;
+              const badge = document.getElementById('mic-status-badge');
+              if (badge) badge.innerHTML = '<span class="inline-block w-1 h-1 rounded-full bg-emerald-400 animate-ping"></span><span>MIC LIVE</span>';
+              
+              const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              const analyser = audioCtx.createAnalyser();
+              const source = audioCtx.createMediaStreamSource(stream);
+              source.connect(analyser);
+              analyser.fftSize = 64;
+              const buffer = new Uint8Array(analyser.frequencyBinCount);
+
+              function pollMic() {
+                analyser.getByteFrequencyData(buffer);
+                let sum = 0;
+                for (let i = 0; i < buffer.length; i++) sum += buffer[i];
+                const avg = sum / buffer.length;
+                // 灵敏度动态映射：随说话声、键盘声起伏
+                audioLevel = Math.min(1.0, Math.pow(avg / 128, 1.1) * 1.8 + 0.12);
+                requestAnimationFrame(pollMic);
+              }
+              pollMic();
+            })
+            .catch(err => {
+              isMicConnected = false;
+            });
+        }
+      }
+      setupMicrophone();
+
+      // 点击底栏主动激活麦克风
+      canvas.parentElement.addEventListener('click', () => {
+        if (!isMicConnected) setupMicrophone();
+      });
+
+      // 悬浮能量微光微粒 (Floating Cyber Dust)
+      const sparkles = [];
+      for (let i = 0; i < 28; i++) {
+        sparkles.push({
+          x: Math.random(),
+          y: Math.random(),
+          r: Math.random() * 1.3 + 0.35,
+          speed: Math.random() * 0.0012 + 0.0006,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+
+      let time = 0;
+      function render() {
+        time += 0.022;
+        if (!w || !h) resize();
+
+        // 平滑声波响应
+        if (!isMicConnected) {
+          // 逼真室内声学脉冲模拟：包含人声起伏与微弱底噪
+          const ambientNoise = Math.sin(time * 2.5) * 0.08 + Math.cos(time * 4.6) * 0.05;
+          const voiceSurge = Math.sin(time * 0.75) > 0.55 ? (Math.sin(time * 9.0) * 0.35 + 0.35) : 0;
+          audioLevel = Math.max(0.12, Math.min(0.92, 0.18 + ambientNoise + voiceSurge));
+        }
+        smoothAudio += (audioLevel - smoothAudio) * 0.15;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // 3D 赛博网格参数 (高密度网格还原参考图质感)
+        const cols = 48;      // 横向精细采样点
+        const rows = 12;      // 纵深层叠山脊切片
+        const maxAmp = 6.0 + smoothAudio * 16.0; // 随环境声强烈起伏的波峰高度
+
+        // 预计算 3D 地形空间网格
+        const grid = [];
+        for (let r = 0; r < rows; r++) {
+          grid[r] = [];
+          const depthRatio = r / (rows - 1); // 0 (远山) ~ 1 (近景波浪)
+          const baseY = h * (0.28 + depthRatio * 0.68);
+
+          for (let c = 0; c <= cols; c++) {
+            const u = c / cols;
+            // 空间复合地形波：主山峰 + 侧翼起伏 + 环境声高频共振颤动
+            const peak1 = Math.sin(u * 5.4 + time * 1.6 + depthRatio * 2.2) * 1.0;
+            const peak2 = Math.cos(u * 9.8 - time * 2.0 + depthRatio * 1.6) * 0.65;
+            const peak3 = Math.sin(u * 15.2 + time * 3.4) * 0.35;
+            const voiceRipple = Math.sin(u * 24.0 + time * 6.5) * (smoothAudio * 0.65);
+            
+            // 边缘平滑衰减，中间山峦壮丽起伏
+            const envelope = Math.sin(u * Math.PI * 0.95 + 0.08);
+            const elevation = (peak1 + peak2 + peak3 + voiceRipple) * maxAmp * (0.35 + depthRatio * 0.75) * envelope;
+
+            grid[r][c] = {
+              x: u * w,
+              y: baseY - elevation
+            };
+          }
+        }
+
+        // 1. 绘制横向流动山脊曲线 (从远景到近景叠加)
+        for (let r = 0; r < rows; r++) {
+          const depthRatio = r / (rows - 1);
+          
+          // 纵深渐变色：远景深邃紫罗兰 -> 近景炽热粉紫霓虹 (完美还原用户参考图)
+          const rCol = Math.round(160 + depthRatio * 88);
+          const gCol = Math.round(50 + depthRatio * 64);
+          const bCol = Math.round(220 + depthRatio * 35);
+          const alpha = 0.22 + depthRatio * 0.76;
+
+          // 半透明山体遮挡填充，产生参考图中如梦似幻的山峦纵深透视感
+          ctx.beginPath();
+          ctx.moveTo(grid[r][0].x, grid[r][0].y);
+          for (let c = 1; c <= cols; c++) {
+            ctx.lineTo(grid[r][c].x, grid[r][c].y);
+          }
+          ctx.lineTo(w, h);
+          ctx.lineTo(0, h);
+          ctx.closePath();
+          ctx.fillStyle = `rgba(14, 6, 26, ${0.10 + depthRatio * 0.16})`;
+          ctx.fill();
+
+          // 绘制横向主网格线 (平滑曲线)
+          ctx.beginPath();
+          ctx.moveTo(grid[r][0].x, grid[r][0].y);
+          for (let c = 1; c <= cols; c++) {
+            const prev = grid[r][c - 1];
+            const curr = grid[r][c];
+            const mx = (prev.x + curr.x) / 2;
+            const my = (prev.y + curr.y) / 2;
+            ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+          }
+          ctx.lineTo(grid[r][cols].x, grid[r][cols].y);
+
+          ctx.strokeStyle = `rgba(${rCol}, ${gCol}, ${bCol}, ${alpha})`;
+          ctx.lineWidth = 0.7 + depthRatio * 0.65;
+          if (r >= rows - 3) {
+            ctx.shadowColor = 'rgba(236, 72, 153, 0.75)';
+            ctx.shadowBlur = 6;
+          } else {
+            ctx.shadowBlur = 0;
+          }
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        // 2. 绘制纵向透视网格经线 (Wireframe Grid Perspective Ribs)
+        ctx.lineWidth = 0.5;
+        for (let c = 0; c <= cols; c += 2) {
+          ctx.beginPath();
+          ctx.moveTo(grid[0][c].x, grid[0][c].y);
+          for (let r = 1; r < rows; r++) {
+            ctx.lineTo(grid[r][c].x, grid[r][c].y);
+          }
+          ctx.strokeStyle = `rgba(168, 85, 247, ${0.16 + smoothAudio * 0.28})`;
+          ctx.stroke();
+        }
+
+        // 3. 悬浮霓虹能量粒子 (漂浮于山峰顶端)
+        for (let i = 0; i < sparkles.length; i++) {
+          const sp = sparkles[i];
+          sp.phase += 0.045;
+          sp.y -= sp.speed;
+          if (sp.y < 0) sp.y = 1;
+
+          const px = sp.x * w;
+          const py = sp.y * (h * 0.75) + 3;
+          const pAlpha = (Math.sin(sp.phase) + 1) / 2 * 0.75 + 0.25;
+
+          ctx.beginPath();
+          ctx.arc(px, py, sp.r, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(244, 114, 182, ${pAlpha})`;
+          ctx.shadowColor = 'rgba(236, 72, 153, 0.8)';
+          ctx.shadowBlur = 4;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        requestAnimationFrame(render);
+      }
+      render();
+    })();
+
+  </script>
+</body>
+</html>
+"""
+
+html_path = r'C:\Users\lzq\.gemini\antigravity\brain\bfdd37af-38af-41bb-bbea-9d8c17ef1286\r7000_cyberpunk_hud.html'
+local_path = r'c:\Users\lzq\codearts\Android\r7000_hud\index.html'
+assets_path = r'c:\Users\lzq\codearts\Android\MixMonolithBuild\assets\index.html'
+
+with open(html_path, 'w', encoding='utf-8') as f:
+    f.write(hud_content)
+
+with open(local_path, 'w', encoding='utf-8') as f:
+    f.write(hud_content)
+
+with open(assets_path, 'w', encoding='utf-8') as f:
+    f.write(hud_content)
+
+print('Generated and synced user exact Xiaomi Mix flip clock & calendar HUD!')

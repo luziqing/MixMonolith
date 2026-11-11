@@ -1,0 +1,33 @@
+# Sensitive SSH credentials & keys (MUST NOT BE COMMITTED)
+mix_rsa
+mix_rsa.pub
+MixMonolithBuild/assets/mix_rsa
+*.key
+*.pem
+
+# Android build outputs & binaries
+MixMonolithBuild/build/
+*.apk
+*.class
+*.dex
+
+# Local backups & third-party packages
+backup_mix/
+ServerBox*
+*.zip
+
+# Temporary test captures & XML dumps
+hud_landscape.png
+hud_preview.png
+monolith_unlocked.png
+ui.xml
+
+# Python & IDE cache
+__pycache__/
+*.py[cod]
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+r7000_hud/

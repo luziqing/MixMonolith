@@ -1,0 +1,7 @@
+-----BEGIN RSA PRIVATE KEY-----
+# 将你的 Windows / Linux 宿主机 SSH 私钥内容粘贴在此处
+# 并将其重命名为 mix_rsa 放置在以下两个位置之一：
+# 1. 项目根目录下: ./mix_rsa
+# 2. 或打包至 assets: MixMonolithBuild/assets/mix_rsa
+# 注意：务必确保是无密码短语（no passphrase）的 OpenSSH / RSA 格式私钥
+-----END RSA PRIVATE KEY-----
