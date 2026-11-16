@@ -55,7 +55,7 @@ SHIM = r"""
     config: function () { return "/probe.json"; },
     ready: function () { },
     haptic: function () { },
-    edit: function () { },
+    edit: function () { hpToast("SETTINGS 只在平板 App 内打开（浏览器预览无对话框）", false); },
     svc: function (action, id) {
       if (!ACT[action] || !ID[id]) { return; }
       try {

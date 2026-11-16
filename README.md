@@ -18,7 +18,7 @@
 ```
 app/src/HpScope/           Android 端（minSdk 15，API 15 老设备也能跑）
   AndroidManifest.xml      minSdk 15 / targetSdk 15 / 横屏 / 全屏 / 常亮
-  java/com/hpscope/mon/    MainActivity + SshProbe（JSch）+ JS 桥（菜单键改 SSH 目标）
+  java/com/hpscope/mon/    MainActivity + SshProbe（JSch）+ JS 桥（改 SSH 目标）
   assets/index.html        ES5 + WebKit 534 兼容的单页 HUD
   assets/probe_remote.py   随 SSH 通道送到服务器执行的只读采集脚本（不落盘）
   assets/hpscope_key    APK 内置身份（服务器已预授权，restrict）
@@ -135,7 +135,7 @@ powershell -ExecutionPolicy Bypass -File tools\make_ssh_preview.ps1
 |---|---|
 | **A（hero）** | CPU / RAM / GPU 三张卡，每张 2 个环表 + 60 点面积图 + caption（绝对用量写在小字里）；分指标配色：CPU 青绿、RAM 品红、GPU 琥珀 |
 | **B** | USAGE GRAPHS（CPU/RAM/GPU 三序列，可点 chip 显隐）+ PROCESS 表（PID / 进程 / CPU 条 / % / 内存，top 6） |
-| **C** | PER-CORE USAGE（24 条 `P0 ●── 1%`，三列）+ STORAGE 表 + MOTHERBOARD SENSORS 网格 + NETWORK & HOST（rx/tx 双线图、负载、架构/内核、探针信息） |
+| **C** | PER-CORE USAGE（24 条 `P0 ●── 1%`，三列）+ STORAGE 表 + MOTHERBOARD SENSORS 网格 + NETWORK & HOST（rx/tx 双线图、负载、架构/内核、探针信息、`⚙ SETTINGS` 按钮） |
 | **抬头** | 金色「◆ 数据中心 GPU 算力节点 jd4090」居中 + 规格参数带（CPU 型号/线程、GPU/显存、发行版、内存、UPTIME） |
 
 离线时显示 OFFLINE 与错误原因；掉线超过 8 s 抬头变 STALE。

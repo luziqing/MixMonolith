@@ -133,6 +133,18 @@ table#tops col.c5 { width: 17%; }
 .kv i { float: right; font-style: normal; color: #d8effc; font-family: "Share Tech Mono", monospace;
   max-width: 66%; overflow: hidden; white-space: nowrap; }
 .kv i.hot { color: #ffb300; } .kv i.cool { color: #2fe6a0; }
+/* visible way into the settings dialog (menu key / long press stay as fallback).
+   Green pill, vertically level with the red STOP ALL capsule in the middle card. */
+.setbtn { display: block; width: 96px; height: 17px; line-height: 17px; margin: 10px auto 0;
+  border-radius: 9px; text-align: center; font-size: 9px; letter-spacing: 1px; color: #9dffd8;
+  border: 1px solid rgba(47,230,160,.5); cursor: pointer;
+  background: -webkit-gradient(linear, left top, left bottom, from(#12352a), to(#07160f));
+  box-shadow: 0 1px 0 rgba(255,255,255,.10) inset, 0 0 10px rgba(47,230,160,.22), 0 2px 0 #04070b;
+  -webkit-tap-highlight-color: rgba(0,0,0,0); }
+.setbtn:active { -webkit-transform: translateY(1px); }
+body.light .setbtn { color: #06603f; border-color: rgba(5,150,105,.45);
+  background: -webkit-gradient(linear, left top, left bottom, from(#e8fff5), to(#c8f2e0));
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 0 8px rgba(5,150,105,.18), 0 2px 0 #b9c5d0; }
 
 /* ---------- banner / footer ---------- */
 #err { display: none; position: absolute; top: 46px; left: 50%; margin-left: -46%; width: 92%;
@@ -477,6 +489,7 @@ body.light .svcall.busy { color: #8a4b06; border-color: rgba(217,119,6,.7); }
           <div>架构 / 内核 <i id="archTag">--</i></div>
           <div>探针 <i id="probeUrl">--</i></div>
         </div>
+        <b class="setbtn" id="setBtn">&#9881; SETTINGS</b>
       </div>
     </div>
   </div>
@@ -1166,6 +1179,12 @@ body.light .svcall.busy { color: #8a4b06; border-color: rgba(217,119,6,.7); }
 
   /* long-press opens the settings dialog through the bridge */
   document.addEventListener("DOMContentLoaded", function () {
+    var setBtn = document.getElementById("setBtn");
+    if (setBtn) {
+      setBtn.onclick = function () {
+        try { if (window.HpScopeBridge && window.HpScopeBridge.edit) { window.HpScopeBridge.edit(); } } catch (e6) { }
+      };
+    }
     var press = null;
     document.body.addEventListener("touchstart", function () {
       press = setTimeout(function () {

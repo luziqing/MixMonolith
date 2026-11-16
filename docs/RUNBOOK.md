@@ -120,7 +120,7 @@ tools\platform-tools\adb.exe shell am start -n com.hpscope.mon/.MainActivity
 
 **使用：**
 - 默认 SSH 目标 `jd4090@<SERVER_IP>:22`，2 s 刷新；横屏全屏、屏幕常亮。
-- 改目标：按 **菜单键**（或长按屏幕 1.2 s）→ 改 主机/端口/用户 → 确定；「测试」按钮直接验证 SSH 连通性。
+- 改目标：点 **NETWORK & HOST** 卡里 `探针` 行下方的 **`⚙ SETTINGS`** 按钮（旧入口：菜单键 / 长按屏幕 1.2 s）→ 改 主机/端口/用户 → 确定；「测试」按钮直接验证 SSH 连通性。
 - 设为常驻监控屏：设置 → 应用 → HpScope → 「清除默认启动器」后按 Home 选它并勾选默认。
 
 ## D. 不重刷 ROM 的备选安装方式（adb 不可用时）
