@@ -1,0 +1,25 @@
+# --- build output -----------------------------------------------------------
+app/build/
+dist/
+*.apk
+
+# --- local Android toolchain (download separately, ~300 MB) -----------------
+tools/android-*/
+tools/platform-tools/
+tools/vendor/
+
+# --- key material (never commit) --------------------------------------------
+# APK 内置的 SSH 身份：这是私钥，只放在本机；公钥加到服务器 authorized_keys。
+app/src/HpScope/assets/hpscope_key
+# 调试签名 keystore：build.ps1 发现缺失会自动用 keytool 重新生成。
+app/debug.keystore
+tools/testkey
+tools/testkey.pub
+tools/appkey*
+tools/ssh_test/*.class
+
+# --- generated previews / scratch -------------------------------------------
+docs/_probe.html
+docs/_hd.html
+docs/_*.png
+docs/preview_shot.png

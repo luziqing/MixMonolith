@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1024, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>HpScope</title>
+<style type="text/css">
+/* HpScope - HP TouchPad (tenderloin, Android 4.0+) server telemetry HUD.
+   Layout after hardviz.com "Performance" screen: uniform card grid, per-metric
+   accent colours, percent-first numbers with absolute values in captions.
+   ES5 + WebKit-534-safe CSS only (no flex/grid/var/calc). */
+* { -webkit-box-sizing: border-box; box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #05070c; }
+body {
+  font-family: "Roboto", "Droid Sans", "MiSans", "Noto Sans CJK SC", sans-serif;
+  color: #cfe9f5; width: 100%; height: 100%; position: relative;
+  background: -webkit-gradient(radial, 50% 28%, 0, 50% 28%, 780, from(#0c1424), to(#05070c));
+  background: -webkit-radial-gradient(50% 28%, #0c1424, #05070c 780px);
+}
+.mono { font-family: "Share Tech Mono", "Consolas", monospace; }
+
+/* ---- per-metric accent colours (hardviz style) ---- */
+.k-cpu { color: #2fe6a0; }  .d-cpu { background: #2fe6a0; }
+.k-ram { color: #ff4d94; }  .d-ram { background: #ff4d94; }
+.k-gpu { color: #ffc107; }  .d-gpu { background: #ffc107; }
+.k-dsk { color: #38bdf8; }  .d-dsk { background: #38bdf8; }
+.k-net { color: #a78bfa; }  .d-net { background: #a78bfa; }
+.k-hot { color: #ffb300; }  .k-bad { color: #ff5d6c; }
+.f-hot { background: -webkit-gradient(linear, left top, right top, from(#ffb300), to(#ff5d6c)); }
+.f-cool { background: -webkit-gradient(linear, left top, right top, from(#2fe6a0), to(#00c2ff)); }
+
+/* ---------- header: compact status bar (host | specs | live) ---------- */
+#hd { height: 40px; padding: 0 14px; position: relative; overflow: hidden;
+  border-bottom: 1px solid rgba(232,185,35,.22);
+  background: -webkit-gradient(linear, left top, left bottom, from(rgba(232,185,35,.10)), to(rgba(0,0,0,0))); }
+#hd .l { position: absolute; left: 0; top: 0; width: 100%; height: 40px; line-height: 40px;
+  text-align: center; padding: 0 232px 0 12px; }
+#hd .r { position: absolute; right: 14px; top: 7px; text-align: right; }
+#specs { font-size: 10.5px; color: #7f97a8; line-height: 40px; letter-spacing: .4px;
+  font-family: "Share Tech Mono", monospace; max-width: 100%; overflow: hidden; white-space: nowrap;
+  text-align: center; }
+#specs b { font-weight: normal; color: #d8b25a; }
+#specs b.hn { color: #ffe17a; font-weight: bold; letter-spacing: .8px; }
+#live { font-size: 11px; color: #2fe6a0; letter-spacing: 1px; }
+#live.down { color: #ff5d6c; }
+#ago { margin-left: 8px; font-size: 10px; color: #4d6373; }
+
+/* ---------- theme switch chip (top right) ---------- */
+#thm { display: inline-block; font-size: 10px; font-weight: normal; letter-spacing: 1px;
+  line-height: 24px; padding: 0 10px; margin-right: 10px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.18); color: #9fc2d4; cursor: pointer;
+  vertical-align: 1px; white-space: nowrap; -webkit-tap-highlight-color: rgba(0,0,0,0); }
+#thm:active { opacity: .55; }
+
+/* ---------- card grid ---------- */
+#grid { padding: 8px 8px 0 8px; }
+.rw { width: 100%; overflow: hidden; margin-bottom: 8px; }
+.rw.a { height: 216px; }
+.rw.b { height: 178px; }
+.rw.c { height: 218px; }
+.card { float: left; height: 100%; padding: 0 4px; }
+.w33 { width: 33.33%; } .w28 { width: 28%; } .w24 { width: 24%; } .w42 { width: 42%; } .w58 { width: 58%; }
+.box { border: 1px solid rgba(255,255,255,.09); border-radius: 5px; background: rgba(13,18,30,.80);
+  height: 100%; padding: 8px 11px 8px 11px; position: relative; overflow: hidden; }
+.ch { font-size: 10px; letter-spacing: 1.5px; color: #7f97a8; height: 15px; overflow: hidden;
+  border-bottom: 1px solid rgba(255,255,255,.07); padding-bottom: 4px; margin-bottom: 7px; }
+.ch i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+.ch span { float: right; color: #4d6373; letter-spacing: 0; max-width: 58%; overflow: hidden;
+  white-space: nowrap; }
+.cap { font-size: 10px; line-height: 14px; color: #4d6373; height: 14px; overflow: hidden; white-space: nowrap; }
+.cap b { font-weight: normal; color: #7f97a8; font-family: "Share Tech Mono", monospace; }
+.cap .r { float: right; }
+
+/* ---------- gauges row (2 per card, like hardviz) ---------- */
+.gauges { height: 117px; overflow: hidden; }
+.g { float: left; width: 50%; text-align: center; position: relative; }
+.g canvas { display: block; width: 104px; height: 104px; margin: 0 auto; }
+.g .ctr { position: absolute; top: 50%; left: 50%; width: 92px; margin: -18px 0 0 -46px; }
+.g .ctr .v { font-size: 25px; line-height: 25px; font-family: "Share Tech Mono", monospace; }
+.g .ctr .u { font-size: 9px; color: #6f8798; letter-spacing: 1px; }
+.g .gcap { font-size: 10px; color: #7f97a8; height: 13px; overflow: hidden; white-space: nowrap; }
+
+/* ---------- mini chart ---------- */
+canvas.chart { display: block; width: 100%; height: 44px; }
+
+/* ---------- multi-series chart ---------- */
+canvas.wide { display: block; width: 100%; height: 100px; }
+.chips { height: 16px; overflow: hidden; }
+.chips b { display: inline-block; font-size: 9px; font-weight: normal; letter-spacing: 1px;
+  color: #9fc2d4; padding: 2px 8px; margin-right: 5px; border: 1px solid rgba(255,255,255,.12);
+  border-radius: 9px; cursor: pointer; }
+.chips b.on { border-color: rgba(255,255,255,.32); color: #e6f7ff; }
+.chips b s { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px;
+  text-decoration: none; }
+
+/* ---------- per-core rows (hardviz PER-CORE USAGE) ---------- */
+.pcs { }
+.pc { float: left; width: 33.33%; padding-right: 6px; margin-bottom: 3px; font-size: 10px; line-height: 14px; }
+.pc span { color: #6f8798; font-family: "Share Tech Mono", monospace; width: 18px; display: inline-block; font-size: 9px; }
+.pc .bar2 { display: inline-block; width: 46%; height: 5px; background: rgba(255,255,255,.07);
+  border-radius: 3px; overflow: hidden; vertical-align: 1px; }
+.pc .bar2 i { display: block; height: 100%; width: 0%; border-radius: 3px; }
+.pc b { float: right; font-weight: normal; color: #d8effc; font-family: "Share Tech Mono", monospace; }
+
+/* ---------- tables ---------- */
+table.tbl { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+table.tbl th { text-align: left; font-weight: normal; color: #4d6373; padding: 1px 4px;
+  border-bottom: 1px solid rgba(255,255,255,.08); height: 13px; letter-spacing: .5px; }
+table.tbl td { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,.04); color: #cfe9f5;
+  overflow: hidden; white-space: nowrap; }
+table.tbl td.n { text-align: right; font-family: "Share Tech Mono", monospace; color: #d8effc; }
+table.tbl td.b { padding-top: 6px; }
+table.tbl tr.lead td { background: rgba(255,255,255,.04); }
+.bar2 { height: 6px; background: rgba(255,255,255,.07); border-radius: 3px; overflow: hidden; }
+.bar2 i, .bar2 .f2 { display: block; height: 100%; width: 0%; border-radius: 3px; }
+table#disks col.c1 { width: 22%; } table#disks col.c2 { width: 40%; }
+table#disks col.c3 { width: 26%; } table#disks col.c4 { width: 12%; }
+table#tops col.c1 { width: 9%; } table#tops col.c2 { width: 34%; }
+table#tops col.c3 { width: 27%; } table#tops col.c4 { width: 13%; }
+table#tops col.c5 { width: 17%; }
+
+/* ---------- sensors grid (2 columns, like MOTHERBOARD SENSORS) ---------- */
+#sensors { font-size: 10px; }
+#sensors .s { float: left; width: 50%; padding-right: 6px; margin-bottom: 5px; color: #7f97a8; }
+#sensors .s span { display: inline-block; max-width: 62%; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; vertical-align: top; }
+#sensors .s b { float: right; font-weight: normal; color: #d8effc;
+  font-family: "Share Tech Mono", monospace; }
+
+/* ---------- info list ---------- */
+.kv { font-size: 10px; }
+.kv div { margin-bottom: 4px; color: #7f97a8; }
+.kv i { float: right; font-style: normal; color: #d8effc; font-family: "Share Tech Mono", monospace;
+  max-width: 66%; overflow: hidden; white-space: nowrap; }
+.kv i.hot { color: #ffb300; } .kv i.cool { color: #2fe6a0; }
+
+/* ---------- banner / footer ---------- */
+#err { display: none; position: absolute; top: 46px; left: 50%; margin-left: -46%; width: 92%;
+  padding: 5px; text-align: center; font-size: 11px; color: #ff9aa4; background: rgba(255,60,80,.12);
+  border: 1px solid rgba(255,60,80,.35); border-radius: 3px; }
+#err.on { display: block; }
+/* ---------- local services: skeuomorphic discs (dribbble "start button" -> hardviz palette) ---------- */
+.svcs { clear: both; margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,.07); }
+.svcs .svch { font-size: 9px; line-height: 10px; letter-spacing: 1.2px; color: #5b7a90; margin-bottom: 4px; }
+.svcs .svcrow { text-align: center; }
+.svc2 .svcbtn { width: 46%; }
+.svc3 .svcbtn { width: 31%; }
+.svcbtn { position: relative; display: inline-block; text-align: center; cursor: pointer; vertical-align: top;
+  padding: 0 2px; -webkit-tap-highlight-color: rgba(0,0,0,0); }
+/* progress ring around the disc: full green = running, amber growing = starting,
+   red shrinking = stopping, faint track = off (see drawSvcRing) */
+.svcbtn canvas.ring { position: absolute; left: 50%; top: -4px; margin-left: -26px;
+  width: 52px; height: 52px; pointer-events: none; }
+.svcbtn .disc { position: relative; display: block; width: 44px; height: 44px; margin: 0 auto 3px;
+  border-radius: 50%; border: 1px solid rgba(140,170,190,.16);
+  background: -webkit-gradient(radial, center 32%, 1, center 50%, 26,
+              from(#33465a), color-stop(.55, #1b2836), to(#0a121b));
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset,
+              0 -3px 5px rgba(0,0,0,.65) inset,
+              0 2px 0 #04070b, 0 5px 8px rgba(0,0,0,.55); }
+.svcbtn .disc:before { content: ""; position: absolute; left: 6px; top: 4px; width: 30px; height: 15px;
+  border-radius: 50%;
+  background: -webkit-gradient(linear, left top, left bottom,
+              from(rgba(255,255,255,.30)), to(rgba(255,255,255,0))); }
+.svcbtn .glyph { position: absolute; left: 50%; top: 50%; }
+.svcbtn .glyph.play { width: 0; height: 0; margin: -7px 0 0 -5px;
+  border-top: 7px solid transparent; border-bottom: 7px solid transparent;
+  border-left: 11px solid #6f8ea6; }
+.svcbtn .glyph.stop { width: 11px; height: 11px; margin: -5px 0 0 -5px; border-radius: 2px;
+  background: #6f8ea6; display: none; }
+.svcbtn .nm { display: block; font-size: 9px; letter-spacing: .6px; color: #8ba3b5; }
+.svcbtn em { display: block; font-style: normal; font-size: 8px; color: #4d6a7d;
+  font-family: "Share Tech Mono", monospace; }
+.svcbtn.on .disc { border-color: rgba(47,230,160,.55);
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset,
+              0 0 14px rgba(47,230,160,.35),
+              0 2px 0 #04070b, 0 5px 8px rgba(0,0,0,.55); }
+.svcbtn.on .glyph.play { display: none; }
+.svcbtn.on .glyph.stop { display: block; background: #7dffc9; }
+.svcbtn.on .nm { color: #cfe9df; }
+.svcbtn.busy .disc { border-color: rgba(255,193,7,.7);
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset,
+              0 0 14px rgba(255,193,7,.4), 0 2px 0 #04070b, 0 5px 8px rgba(0,0,0,.55);
+  -webkit-animation: svcpulse 1s infinite; }
+.svcbtn.busy .glyph.play { border-left-color: #ffd166; }
+.svcbtn.busy .nm { color: #ffd166; }
+/* stop in flight: the disc turns red as well, so disc + ring agree */
+.svcbtn.busy.stopping .disc { border-color: rgba(255,93,108,.75);
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 0 14px rgba(255,93,108,.45),
+              0 2px 0 #04070b, 0 5px 8px rgba(0,0,0,.55); }
+.svcbtn.busy.stopping .glyph.play { border-left-color: #ff8b96; }
+.svcbtn.busy.stopping .nm { color: #ff9aa4; }
+@-webkit-keyframes svcpulse { 0% { opacity: 1; } 50% { opacity: .55; } 100% { opacity: 1; } }
+.svcbtn.armed .disc { border-color: rgba(255,93,108,.8);
+  box-shadow: 0 1px 0 rgba(255,255,255,.18) inset,
+              0 0 16px rgba(255,93,108,.45), 0 2px 0 #04070b, 0 5px 8px rgba(0,0,0,.55); }
+.svcbtn.armed .glyph.stop { display: block; background: #ff8b96; }
+.svcbtn.armed .nm { color: #ff9aa4; }
+.svcbtn:active .disc { -webkit-transform: translateY(1px);
+  box-shadow: 0 1px 0 rgba(255,255,255,.1) inset, 0 -2px 4px rgba(0,0,0,.6) inset, 0 1px 0 #04070b; }
+
+/* red "stop everything on the GPU" capsule under the three service discs */
+.svcall { display: block; width: 88%; height: 17px; line-height: 17px; margin: 5px auto 0;
+  border-radius: 9px; text-align: center; font-size: 9px; letter-spacing: 1.1px; color: #ffd3d8;
+  border: 1px solid rgba(255,93,108,.5); cursor: pointer;
+  background: -webkit-gradient(linear, left top, left bottom, from(#5a1b24), to(#2a0c11));
+  box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 -2px 3px rgba(0,0,0,.6) inset, 0 2px 0 #04070b;
+  -webkit-tap-highlight-color: rgba(0,0,0,0); }
+.svcall i { display: inline-block; width: 7px; height: 7px; border-radius: 1px;
+  background: #ff5d6c; margin-right: 6px; vertical-align: 1px; }
+.svcall:active { -webkit-transform: translateY(1px); }
+.svcall.armed { color: #fff; border-color: #ff5d6c;
+  background: -webkit-gradient(linear, left top, left bottom, from(#a0202d), to(#5c0d15));
+  box-shadow: 0 0 12px rgba(255,93,108,.55), 0 1px 0 rgba(255,255,255,.18) inset; }
+.svcall.busy { color: #ffd166; border-color: rgba(255,193,7,.7);
+  -webkit-animation: svcpulse 1s infinite; }
+
+#ft { position: absolute; bottom: 0; left: 0; width: 100%; height: 20px; padding: 0 14px;
+  font-size: 10px; color: #3f5262; border-top: 1px solid rgba(255,255,255,.07); line-height: 20px; }
+#ft .r { float: right; }
+#brand { color: #a8862a; letter-spacing: 1px; }
+
+/* ======================================================================
+   light theme: same hardviz layout on "daylight paper" - white cards,
+   ink text, and the same accent hues darkened for contrast on white.
+   Applied by adding class="light" to <body>; no CSS variables (WebKit 534).
+   ====================================================================== */
+body.light {
+  color: #16202b;
+  background: -webkit-gradient(radial, 50% 28%, 0, 50% 28%, 780, from(#ffffff), to(#e8edf3));
+  background: -webkit-radial-gradient(50% 28%, #ffffff, #e8edf3 780px);
+}
+body.light .k-cpu { color: #0a9d68; }  body.light .d-cpu { background: #0a9d68; }
+body.light .k-ram { color: #d81b60; }  body.light .d-ram { background: #d81b60; }
+body.light .k-gpu { color: #b57500; }  body.light .d-gpu { background: #e0a800; }
+body.light .k-dsk { color: #0369a1; }  body.light .d-dsk { background: #0284c7; }
+body.light .k-net { color: #6d28d9; }  body.light .d-net { background: #7c3aed; }
+body.light .k-hot { color: #b45309; }  body.light .k-bad { color: #d32f2f; }
+
+/* header */
+body.light #hd { border-bottom-color: rgba(160,120,10,.30);
+  background: -webkit-gradient(linear, left top, left bottom,
+              from(rgba(232,185,35,.20)), to(rgba(255,255,255,0))); }
+body.light #specs { color: #55697a; }
+body.light #specs b { color: #9a7d1c; }
+body.light #specs b.hn { color: #75590a; }
+body.light #live { color: #0a9d68; }
+body.light #live.down { color: #d32f2f; }
+body.light #ago { color: #7c8e9c; }
+body.light #thm { border-color: rgba(24,44,66,.22); color: #4a6373; background: rgba(255,255,255,.65); }
+
+/* cards, captions, lists */
+body.light .box { border-color: rgba(24,44,66,.14); background: #ffffff;
+  box-shadow: 0 1px 2px rgba(24,44,66,.07); }
+body.light .ch { color: #5a6e7e; border-bottom-color: rgba(24,44,66,.10); }
+body.light .ch span { color: #8b9bab; }
+body.light .cap { color: #7c8e9c; }
+body.light .cap b { color: #5a6e7e; }
+body.light .g .ctr .u { color: #7c8e9c; }
+body.light .g .gcap { color: #5a6e7e; }
+body.light .chips b { color: #4a6373; border-color: rgba(24,44,66,.18); }
+body.light .chips b.on { border-color: rgba(24,44,66,.42); color: #16202b; background: rgba(24,44,66,.06); }
+body.light .pc span { color: #7c8e9c; }
+body.light .pc b { color: #16202b; }
+body.light .pc .bar2, body.light .bar2 { background: rgba(24,44,66,.10); }
+body.light table.tbl th { color: #7c8e9c; border-bottom-color: rgba(24,44,66,.14); }
+body.light table.tbl td { color: #1a2430; border-bottom-color: rgba(24,44,66,.07); }
+body.light table.tbl td.n { color: #0f1720; }
+body.light table.tbl tr.lead td { background: rgba(24,44,66,.045); }
+body.light #sensors .s { color: #5a6e7e; }
+body.light #sensors .s b { color: #16202b; }
+body.light .kv div { color: #5a6e7e; }
+body.light .kv i { color: #16202b; }
+body.light #err { color: #b3261e; background: rgba(211,47,47,.08); border-color: rgba(211,47,47,.35); }
+body.light #ft { color: #6b7c8c; border-top-color: rgba(24,44,66,.12); }
+body.light #brand { color: #8a6a0d; }
+
+/* service discs: brushed aluminium instead of gunmetal */
+body.light .svcs { border-top-color: rgba(24,44,66,.12); }
+body.light .svcs .svch { color: #7c8e9c; }
+body.light .svcbtn .disc { border-color: rgba(24,44,66,.18);
+  background: -webkit-gradient(radial, center 32%, 1, center 50%, 26,
+              from(#ffffff), color-stop(.55, #e6ecf2), to(#c7d2dc));
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset,
+              0 -3px 5px rgba(24,44,66,.22) inset,
+              0 2px 0 #b9c5d0, 0 4px 7px rgba(24,44,66,.22); }
+body.light .svcbtn .disc:before {
+  background: -webkit-gradient(linear, left top, left bottom,
+              from(rgba(255,255,255,.95)), to(rgba(255,255,255,0))); }
+body.light .svcbtn .glyph.play { border-left-color: #5a6e7e; }
+body.light .svcbtn .glyph.stop { background: #5a6e7e; }
+body.light .svcbtn .nm { color: #4a6373; }
+body.light .svcbtn em { color: #8b9bab; }
+body.light .svcbtn.on .disc { border-color: rgba(5,150,105,.65);
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset,
+              0 0 12px rgba(5,150,105,.30), 0 2px 0 #b9c5d0, 0 4px 7px rgba(24,44,66,.22); }
+body.light .svcbtn.on .glyph.stop { background: #0a9d68; }
+body.light .svcbtn.on .nm { color: #075e42; }
+body.light .svcbtn.busy .disc { border-color: rgba(217,119,6,.75);
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset,
+              0 0 12px rgba(217,119,6,.32), 0 2px 0 #b9c5d0, 0 4px 7px rgba(24,44,66,.22);
+  -webkit-animation: svcpulse 1s infinite; }
+body.light .svcbtn.busy .glyph.play { border-left-color: #b45309; }
+body.light .svcbtn.busy .nm { color: #8a4b06; }
+body.light .svcbtn.busy.stopping .disc { border-color: rgba(211,47,47,.85);
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset,
+              0 0 12px rgba(211,47,47,.32), 0 2px 0 #b9c5d0, 0 4px 7px rgba(24,44,66,.22); }
+body.light .svcbtn.busy.stopping .glyph.play { border-left-color: #d32f2f; }
+body.light .svcbtn.busy.stopping .nm { color: #b3261e; }
+body.light .svcbtn.armed .disc { border-color: rgba(211,47,47,.85);
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset,
+              0 0 14px rgba(211,47,47,.30), 0 2px 0 #b9c5d0, 0 4px 7px rgba(24,44,66,.22); }
+body.light .svcbtn.armed .glyph.stop { background: #d32f2f; }
+body.light .svcbtn.armed .nm { color: #b3261e; }
+body.light .svcbtn:active .disc {
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset,
+              0 -2px 4px rgba(24,44,66,.28) inset, 0 1px 0 #b9c5d0; }
+
+/* STOP ALL capsule: pink paper + solid red when armed */
+body.light .svcall { color: #8a1020; border-color: rgba(211,47,47,.45);
+  background: -webkit-gradient(linear, left top, left bottom, from(#ffe6ea), to(#ffccd3));
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset,
+              0 -2px 3px rgba(24,44,66,.18) inset, 0 2px 0 #d8b3b9; }
+body.light .svcall i { background: #d32f2f; }
+body.light .svcall.armed { color: #fff; border-color: #d32f2f;
+  background: -webkit-gradient(linear, left top, left bottom, from(#e0362f), to(#b3261e));
+  box-shadow: 0 0 10px rgba(211,47,47,.45), 0 1px 0 rgba(255,255,255,.35) inset; }
+body.light .svcall.busy { color: #8a4b06; border-color: rgba(217,119,6,.7); }
+</style>
+</head>
+<body>
+
+<div id="hd">
+  <div class="l">
+    <div id="specs">initialising telemetry bus ...</div>
+  </div>
+  <div class="r"><b id="thm" title="toggle dark / light">&#9788; LIGHT</b><span id="live">&#9679; LIVE</span><span id="ago"></span></div>
+</div>
+
+<div id="err"></div>
+
+<div id="grid">
+
+  <!-- ============ row A: CPU / RAM / GPU metric cards ============ -->
+  <div class="rw a">
+    <div class="card w33">
+      <div class="box">
+        <div class="ch"><i class="d-cpu"></i>CPU<span id="cpuName"></span></div>
+        <div class="gauges">
+          <div class="g">
+            <canvas id="cpuRing" width="208" height="208"></canvas>
+            <div class="ctr"><div class="v k-cpu" id="cpuVal">--</div><div class="u">USAGE %</div></div>
+            <div class="gcap" id="cpuLoad">load --</div>
+          </div>
+          <div class="g">
+            <canvas id="tempRing" width="208" height="208"></canvas>
+            <div class="ctr"><div class="v k-hot" id="cpuTemp">--</div><div class="u">TEMP</div></div>
+            <div class="gcap" id="tempSrc">sensors --</div>
+          </div>
+        </div>
+        <canvas class="chart" id="cpuHist" width="600" height="88"></canvas>
+        <div class="cap"><span class="r" id="uptime">--</span><b id="coreCount">--</b> logical cores</div>
+      </div>
+    </div>
+    <div class="card w33">
+      <div class="box">
+        <div class="ch"><i class="d-ram"></i>RAM<span id="ramTotal"></span></div>
+        <div class="gauges">
+          <div class="g">
+            <canvas id="ramRing" width="208" height="208"></canvas>
+            <div class="ctr"><div class="v k-ram" id="memPct">--</div><div class="u">USAGE %</div></div>
+            <div class="gcap" id="memVal">--</div>
+          </div>
+          <div class="g">
+            <canvas id="swapRing" width="208" height="208"></canvas>
+            <div class="ctr"><div class="v k-ram" id="swapPct">--</div><div class="u">SWAP %</div></div>
+            <div class="gcap" id="swapVal">--</div>
+          </div>
+        </div>
+        <canvas class="chart" id="memHist" width="600" height="88"></canvas>
+        <div class="cap"><span class="r" id="loadTag">load --</span>memory in use · 2 s / sample</div>
+      </div>
+    </div>
+    <div class="card w33">
+      <div class="box">
+        <div class="ch"><i class="d-gpu"></i>GPU<span id="gpuName"></span></div>
+        <div class="gauges">
+          <div class="g">
+            <canvas id="gpuRing" width="208" height="208"></canvas>
+            <div class="ctr"><div class="v k-gpu" id="gpuUtil">--</div><div class="u">CORE %</div></div>
+            <div class="gcap" id="gpuPow">--</div>
+          </div>
+          <div class="g">
+            <canvas id="vramRing" width="208" height="208"></canvas>
+            <div class="ctr"><div class="v k-gpu" id="vramPct">--</div><div class="u">VRAM %</div></div>
+            <div class="gcap" id="gpuVram">--</div>
+          </div>
+        </div>
+        <canvas class="chart" id="gpuHist" width="600" height="88"></canvas>
+        <div class="cap"><span class="r" id="fanRpm">fan --</span>power <b id="gpuPowNow">--</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ row B: usage graphs + processes ============ -->
+  <div class="rw b">
+    <div class="card w58">
+      <div class="box">
+        <div class="ch"><i class="d-cpu"></i>USAGE GRAPHS<span>90 samples · 2 s each</span></div>
+        <canvas class="wide" id="usageHist" width="900" height="224"></canvas>
+        <div class="chips" id="usageChips">
+          <b class="on"><s class="d-cpu"></s>CPU</b><b class="on"><s class="d-ram"></s>RAM</b><b class="on"><s class="d-gpu"></s>GPU</b>
+        </div>
+        <div class="cap"><span class="r" id="usageStat">--</span></div>
+      </div>
+    </div>
+    <div class="card w42">
+      <div class="box">
+        <div class="ch"><i class="d-cpu"></i>PROCESS<span id="topHint"></span></div>
+        <table class="tbl" id="tops">
+          <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"></colgroup>
+          <thead><tr><th>PID</th><th>PROCESS</th><th>CPU</th><th class="n">%</th><th class="n">MEMORY</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="cap" style="margin-top:0px"><span class="r" id="dockerTag">--</span>docker</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ row C: per-core / storage / sensors / network ============ -->
+  <div class="rw c">
+    <div class="card w28">
+      <div class="box">
+        <div class="ch"><i class="d-cpu"></i>PER-CORE USAGE<span id="coreCount2"></span></div>
+        <div class="pcs" id="cores"></div>
+      </div>
+    </div>
+    <div class="card w24">
+      <div class="box">
+        <div class="ch"><i class="d-dsk"></i>STORAGE<span id="dskCount"></span></div>
+        <table class="tbl" id="disks">
+          <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>
+          <thead><tr><th>MOUNT</th><th>USED / TOTAL</th><th>LOAD</th><th class="n">%</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="svcs svc2">
+          <div class="svch">LOCAL SERVICES</div>
+          <div class="svcrow">
+            <b class="svcbtn" data-svc="llm9020"><span class="disc"><i class="glyph play"></i><i class="glyph stop"></i></span><span class="nm">QWEN&middot;HQ</span><em>9020</em></b>
+            <b class="svcbtn" data-svc="llm9022"><span class="disc"><i class="glyph play"></i><i class="glyph stop"></i></span><span class="nm">QWEN&middot;Q8</span><em>9022</em></b>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card w24">
+      <div class="box">
+        <div class="ch"><i class="d-cpu"></i>MOTHERBOARD SENSORS<span id="sensorSrc"></span></div>
+        <div id="sensors"></div>
+        <div class="svcs svc3">
+          <div class="svch">SERVICES</div>
+          <div class="svcrow">
+            <b class="svcbtn" data-svc="asr"><span class="disc"><i class="glyph play"></i><i class="glyph stop"></i></span><span class="nm">ASR</span><em>13560</em></b>
+            <b class="svcbtn" data-svc="tts"><span class="disc"><i class="glyph play"></i><i class="glyph stop"></i></span><span class="nm">TTS</span><em>13561</em></b>
+            <b class="svcbtn" data-svc="mineru"><span class="disc"><i class="glyph play"></i><i class="glyph stop"></i></span><span class="nm">MINERU</span><em>9038</em></b>
+          </div>
+          <b class="svcall" id="svcAll"><i></i><span id="svcAllTxt">STOP ALL &middot; GPU</span></b>
+        </div>
+      </div>
+    </div>
+    <div class="card w24">
+      <div class="box">
+        <div class="ch"><i class="d-net"></i>NETWORK &amp; HOST</div>
+        <canvas class="chart" id="netHist" width="600" height="88"></canvas>
+        <div class="kv" style="margin-top:6px">
+          <div>RX / TX <i id="netVal">--</i></div>
+          <div>负载 1/5/15 <i id="loadTag2">--</i></div>
+          <div>架构 / 内核 <i id="archTag">--</i></div>
+          <div>探针 <i id="probeUrl">--</i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="ft">
+  <span id="brand">DESIGN FOR HP TOUCHPAD</span>
+  <span class="r" id="probeShort">--</span>
+</div>
+
+<script type="text/javascript">
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var lastOk = 0, first = true, coreEls = [];
+  var histCpu = [], histMem = [], histGpu = [], histNet = [];
+  var url = "";
+  try { url = window.HpScopeBridge && window.HpScopeBridge.config ? window.HpScopeBridge.config() : ""; } catch (e) {}
+  if (!url && window.__HP_URL__) { url = window.__HP_URL__; }
+  if (!url) { url = "json"; }
+  function probeUrl() {
+    var u = url;
+    try { if (window.__HP_URL__) { u = window.__HP_URL__; } } catch (e) { }
+    return u;
+  }
+
+  /* ---------------- helpers ---------------- */
+  function pad(n, w) { var s = "" + (n < 0 ? 0 : n), i; for (i = s.length; i < w; i++) { s = "0" + s; } return s; }
+  function dur(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    var d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600),
+        m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return (d ? d + "d " : "") + pad(h, 2) + "h " + pad(m, 2) + "m " + pad(s, 2) + "s";
+  }
+  function num(v, d) { if (v === null || v === undefined || isNaN(v)) { return "--"; }
+    return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d).replace(/\.0+$/, ""); }
+  function gb(v) { return num(v / 1024, 1) + " GB"; }
+  /* MemTotal hides kernel/GPU reservations; show installed module capacity
+     (188 GiB visible -> 192 GB) so the headline matches the physical DIMMs. */
+  function instG(mb) { return Math.ceil(mb / 8192) * 8; }
+  function mb(v) { return num(v, 0) + " MB"; }
+  function txt(t) { return t === null || t === undefined || t === "" ? "--" : t + ""; }
+  function short(s, n) { s = txt(s); return s.length > n ? s.slice(0, n - 1) + "\u2026" : s; }
+  /* severity colour class used for values and headlines */
+  function cls(p, good, bad) {
+    if (p === null || p === undefined || isNaN(p)) { return ""; }
+    return p < good ? "k-cpu" : (p < bad ? "k-hot" : "k-bad");
+  }
+  /* ---------------- theme: dark gunmetal HUD (default) / light paper ----------------
+     Canvas art cannot use CSS, so every palette lives in these tables and is
+     swapped on toggle; render(lastSnap) repaints without appending history. */
+  var THEME_KEY = "hpscope.theme", replay = false, lastSnap = null;
+  var TH_D = { track: "rgba(255,255,255,.08)", soft: "rgba(255,255,255,.12)",
+               grid: "rgba(255,255,255,.05)", axis: "rgba(127,151,168,.75)", dot: "#ffffff" };
+  var TH_L = { track: "rgba(24,44,66,.16)", soft: "rgba(24,44,66,.22)",
+               grid: "rgba(24,44,66,.09)", axis: "rgba(78,98,116,.95)", dot: "#ffffff" };
+  var AC_D = { cpu: [47, 230, 160], ram: [255, 77, 148], gpu: [255, 193, 7],
+               dsk: [56, 189, 248], net: [167, 139, 250],
+               hot: [255, 176, 0], bad: [255, 93, 108], idle: [90, 110, 130] };
+  var AC_L = { cpu: [10, 157, 104], ram: [216, 27, 96], gpu: [181, 121, 0],
+               dsk: [3, 105, 161], net: [109, 40, 217],
+               hot: [180, 83, 9], bad: [211, 47, 47], idle: [130, 144, 158] };
+  var C_D = { blue: [30, 144, 255], amber: [255, 193, 7], red: [255, 59, 48] };
+  var C_L = { blue: [21, 101, 192], amber: [217, 119, 6], red: [211, 47, 47] };
+  var TH = TH_D, AC = AC_D, C = C_D;
+
+  function rgbc(a) { return "rgb(" + a[0] + "," + a[1] + "," + a[2] + ")"; }
+  function isLight() { return document.body.className.indexOf("light") >= 0; }
+
+  function setTheme(t, persist) {
+    var light = (t === "light");
+    document.body.className = light ? "light" : "";
+    TH = light ? TH_L : TH_D; AC = light ? AC_L : AC_D; C = light ? C_L : C_D;
+    var chip = $("thm");
+    if (chip) { chip.innerHTML = light ? "&#9790; DARK" : "&#9788; LIGHT"; }
+    if (persist) { try { localStorage.setItem(THEME_KEY, light ? "light" : "dark"); } catch (eT) { } }
+    if (lastSnap) {
+      replay = true;
+      try { render(lastSnap); } catch (eR) { }
+      replay = false;
+    }
+  }
+
+  /* per-core bar colour: blue -> amber -> red with the load */
+  function mix(a, b, t) { return [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t)]; }
+  function loadColor(v) { return v < 50 ? mix(C.blue, C.amber, v / 50) : mix(C.amber, C.red, (v - 50) / 50); }
+  function rgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; }
+
+  /* ---------------- ring gauge ---------------- */
+  function ring(cv, pct, color) {
+    var c = cv.getContext("2d"), w = cv.width, h = cv.height, cx = w / 2, cy = h / 2, r = w * 0.40;
+    var start = -Math.PI * 0.75, end = Math.PI * 1.25;
+    var p = Math.max(0, Math.min(100, pct === null || pct === undefined ? 0 : pct)) / 100;
+    c.clearRect(0, 0, w, h);
+    c.lineWidth = Math.max(6, w * 0.062); c.lineCap = "butt";
+    c.strokeStyle = TH.track;
+    c.beginPath(); c.arc(cx, cy, r, start, end); c.stroke();
+    c.strokeStyle = color || rgba(loadColor(p * 100), 0.95);
+    c.beginPath(); c.arc(cx, cy, r, start, start + (end - start) * p); c.stroke();
+    var a = start + (end - start) * p, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    c.fillStyle = TH.dot; c.beginPath(); c.arc(x, y, w * 0.02, 0, Math.PI * 2); c.fill();
+  }
+
+  /* ---------------- multi-series area chart ---------------- */
+  function chart(cv, series, opts) {
+    if (!cv) { return; }
+    var c = cv.getContext("2d"), w = cv.width, h = cv.height, i, k, x, y;
+    c.clearRect(0, 0, w, h);
+    c.strokeStyle = TH.grid; c.lineWidth = 1;
+    for (k = 1; k < 4; k++) {
+      var gy = Math.round(h * k / 4) + .5;
+      c.beginPath(); c.moveTo(0, gy); c.lineTo(w, gy); c.stroke();
+    }
+    if (!series.length) { return; }
+    var max = 100;
+    for (k = 0; k < series.length; k++) {
+      for (i = 0; i < series[k].data.length; i++) {
+        if (series[k].data[i] > max) { max = series[k].data[i]; }
+      }
+    }
+    for (k = 0; k < series.length; k++) {
+      var s = series[k], d = s.data;
+      if (!d || d.length < 2) { continue; }
+      c.strokeStyle = s.color; c.lineWidth = h > 120 ? 2.4 : 1.8;
+      c.beginPath();
+      for (i = 0; i < d.length; i++) {
+        x = i / (d.length - 1) * (w - 4) + 2;
+        y = h - 3 - (d[i] / max) * (h - 8);
+        if (i) { c.lineTo(x, y); } else { c.moveTo(x, y); }
+      }
+      c.stroke();
+      c.lineTo(w, h); c.lineTo(2, h); c.closePath();
+      c.fillStyle = s.color.replace("rgb", "rgba").replace(")", ",.14)");
+      c.fill();
+    }
+    if (opts && opts.label) {
+      c.fillStyle = TH.axis;
+      c.font = "bold " + Math.round(h * 0.13) + "px sans-serif";
+      c.fillText(opts.label, 8, h * 0.22);
+    }
+  }
+
+  /* ---------------- per-core rows ---------------- */
+  function coreSkeleton(n) {
+    var html = "", i;
+    coreEls = [];
+    for (i = 0; i < n; i++) {
+      html += '<div class="pc"><span>P' + i + '</span><div class="bar2"><i id="pc' + i + '"></i></div><b id="pv' + i + '">--</b></div>';
+    }
+    $("cores").innerHTML = html;
+    for (i = 0; i < n; i++) { coreEls.push($("pc" + i)); }
+  }
+
+  /* ---------------- usage-graph chips ---------------- */
+  var showSeries = { cpu: true, ram: true, gpu: true };
+  (function () {
+    var chips = $("usageChips").getElementsByTagName("b"), i;
+    for (i = 0; i < chips.length; i++) {
+      chips[i].setAttribute("data-k", ["cpu", "ram", "gpu"][i]);
+      chips[i].onclick = function () {
+        var key = this.getAttribute("data-k");
+        if (!key) { return; }
+        showSeries[key] = !showSeries[key];
+        this.className = showSeries[key] ? "on" : "";
+        drawUsage();
+      };
+    }
+  })();
+  function drawUsage() {
+    var s = [], last;
+    if (showSeries.cpu) { s.push({ data: histCpu, color: rgbc(AC.cpu) }); }
+    if (showSeries.ram) { s.push({ data: histMem, color: rgbc(AC.ram) }); }
+    if (showSeries.gpu) { s.push({ data: histGpu, color: rgbc(AC.gpu) }); }
+    chart($("usageHist"), s, null);
+    last = function (a) { return a.length ? num(a[a.length - 1], 1) : "--"; };
+    $("usageStat").innerHTML = "cpu " + last(histCpu) + "% · ram " + last(histMem) + "% · gpu " + last(histGpu) + "%";
+  }
+
+  /* ---------------- local services (skeuomorphic discs) ---------------- */
+  var svcUp = {}, svcBusy = {}, svcWant = {}, svcArm = {}, svcAllArm = false, svcAllBusy = false;
+  var svcT0 = {}, svcRings = {};
+  /* seconds a start usually needs before the port listens (the ring fills meanwhile) */
+  var SVC_EXPECT = { llm9020: 100, llm9022: 60, asr: 40, tts: 50, mineru: 60 };
+
+  function svcRingColor(id) {
+    var light = isLight();
+    if (svcBusy[id]) {
+      return svcWant[id] === "stop" ? (light ? "#d32f2f" : "#ff5d6c")
+                                    : (light ? "#b45309" : "#ffc107");
+    }
+    if (svcArm[id]) { return light ? "#d32f2f" : "#ff5d6c"; }
+    if (svcUp[id]) { return light ? "#0a9d68" : "#2fe6a0"; }
+    return null;
+  }
+
+  function svcRingProgress(id) {
+    if (svcBusy[id]) {
+      var t0 = svcT0[id];
+      var el = (typeof t0 === "number") ? (Date.now() - t0) / 1000 : 0;
+      if (el < 0) { el = 0; }
+      if (svcWant[id] === "stop") {
+        /* 100% -> 10% over ~3 s, then hold a red sliver until the port is gone */
+        return Math.max(0.10, 1 - el / 3);
+      }
+      return Math.max(0.04, Math.min(0.94, el / (SVC_EXPECT[id] || 60)));
+    }
+    if (svcArm[id]) { return 1; }
+    return svcUp[id] ? 1 : 0;
+  }
+
+  function svcRing(id) {
+    if (svcRings[id]) { return svcRings[id]; }
+    var el = document.querySelector('.svcbtn[data-svc="' + id + '"]');
+    if (!el) { return null; }
+    var cv = document.createElement("canvas");
+    cv.className = "ring"; cv.width = 52; cv.height = 52;
+    el.appendChild(cv);   /* after the disc: the disc's drop shadow would hide it otherwise */
+    svcRings[id] = cv;
+    return cv;
+  }
+
+  function drawSvcRing(id) {
+    var cv = svcRing(id);
+    if (!cv || !cv.getContext) { return; }
+    var ctx = cv.getContext("2d"), cx = 26, cy = 26, r = 23, light = isLight();
+    ctx.clearRect(0, 0, 52, 52);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = light ? "rgba(24,44,66,.24)" : "rgba(255,255,255,.16)";
+    ctx.stroke();
+    var p = svcRingProgress(id), col = svcRingColor(id);
+    if (!col || p <= 0) { return; }
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p, false);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = col;
+    ctx.stroke();
+  }
+
+  function drawSvcRings() {
+    for (var id in SVC_EXPECT) {
+      if (SVC_EXPECT.hasOwnProperty(id)) { drawSvcRing(id); }
+    }
+  }
+
+  function setAllText(t) {
+    var el = document.getElementById("svcAllTxt");
+    if (el) { el.textContent = t; }
+  }
+
+  function paintSvc(list) {
+    if (!list) { return; }
+    var anyUp = false;
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i], el = document.querySelector('.svcbtn[data-svc="' + it.id + '"]');
+      svcUp[it.id] = !!it.up;
+      if (it.up) { anyUp = true; }
+      if (!el) { continue; }
+      if (svcBusy[it.id]) {
+        /* a command is done the moment the port reaches the wanted state:
+           start -> port listening, stop -> port gone. Otherwise stay amber. */
+        var settled = (svcWant[it.id] === "stop") ? !it.up : !!it.up;
+        if (!settled) { continue; }
+        svcBusy[it.id] = false;
+      }
+      if (svcArm[it.id]) { drawSvcRing(it.id); continue; }   /* red confirm state survives polling */
+      el.className = "svcbtn" + (it.up ? " on" : "");
+      drawSvcRing(it.id);
+    }
+    if (svcAllBusy && !anyUp) {
+      svcAllBusy = false;
+      var allBtn = document.getElementById("svcAll");
+      if (allBtn) { allBtn.className = "svcall"; }
+      setAllText("STOP ALL \u00b7 GPU");
+    }
+  }
+
+  function bindSvc() {
+    var btns = document.querySelectorAll(".svcbtn"), i;
+    for (i = 0; i < btns.length; i++) {
+      (function (el) {
+        el.onclick = function () {
+          var id = el.getAttribute("data-svc");
+          if (svcBusy[id]) { return; }
+          var up = svcUp[id], bridge = window.HpScopeBridge;
+          if (!bridge || !bridge.svc) { return; }
+          if (bridge.haptic) { try { bridge.haptic(12); } catch (e1) { } }
+          if (up && !svcArm[id]) {
+            svcArm[id] = true;
+            el.className = "svcbtn armed";
+            drawSvcRing(id);
+            setTimeout(function () {
+              if (svcBusy[id]) { svcArm[id] = false; return; }
+              svcArm[id] = false;
+              el.className = "svcbtn" + (svcUp[id] ? " on" : "");
+              drawSvcRing(id);
+            }, 3000);
+            return;
+          }
+          svcArm[id] = false;
+          svcBusy[id] = true;
+          svcWant[id] = up ? "stop" : "start";
+          svcT0[id] = Date.now();
+          el.className = "svcbtn busy" + (up ? " stopping" : "");
+          drawSvcRing(id);
+          /* a 27B/30B load needs 1-2 min to bind: paintSvc clears this as soon
+             as the port reaches the wanted state; this is only the backstop */
+          setTimeout(function () {
+            if (!svcBusy[id]) { return; }
+            svcBusy[id] = false;
+            el.className = "svcbtn" + (svcUp[id] ? " on" : "");
+            drawSvcRing(id);
+          }, 90000);
+          try { bridge.svc(up ? "stop" : "start", id); }
+          catch (e2) { svcBusy[id] = false; }
+        };
+      })(btns[i]);
+    }
+
+    /* red capsule: stop every service that holds a GPU port */
+    var all = document.getElementById("svcAll");
+    if (all) {
+      all.onclick = function () {
+        var bridge = window.HpScopeBridge;
+        if (!bridge || !bridge.svc || svcAllBusy) { return; }
+        if (bridge.haptic) { try { bridge.haptic(12); } catch (e1) { } }
+        if (!svcAllArm) {
+          svcAllArm = true;
+          all.className = "svcall armed";
+          setAllText("TAP AGAIN \u00b7 STOP ALL");
+          setTimeout(function () {
+            if (svcAllBusy) { svcAllArm = false; return; }
+            svcAllArm = false; all.className = "svcall";
+            setAllText("STOP ALL \u00b7 GPU");
+          }, 3000);
+          return;
+        }
+        svcAllArm = false;
+        svcAllBusy = true;
+        all.className = "svcall busy";
+        setAllText("STOPPING\u2026");
+        setTimeout(function () {
+          if (!svcAllBusy) { return; }
+          svcAllBusy = false; all.className = "svcall";
+          setAllText("STOP ALL \u00b7 GPU");
+        }, 90000);
+        try { bridge.svc("stopall", "all"); }
+        catch (e2) { svcAllBusy = false; all.className = "svcall"; setAllText("STOP ALL \u00b7 GPU"); }
+      };
+    }
+
+    /* paint every ring once, then animate only the discs with a command in flight */
+    drawSvcRings();
+    setInterval(function () {
+      for (var id in svcBusy) {
+        if (svcBusy[id]) { drawSvcRing(id); }
+      }
+    }, 100);
+  }
+
+  /* ---------------- render ---------------- */
+  function render(d) {
+    var t = new Date();
+    $("ago").innerHTML = "updated " + pad(t.getHours(), 2) + ":" + pad(t.getMinutes(), 2) + ":" + pad(t.getSeconds(), 2);
+    if (d.error) {
+      $("err").innerHTML = "probe error: " + d.error;
+      $("err").className = "on";
+      $("live").innerHTML = "&#9679; OFFLINE"; $("live").className = "down";
+      return;
+    }
+    $("err").className = ""; $("err").innerHTML = "";
+    $("live").innerHTML = "&#9679; LIVE"; $("live").className = "";
+
+    /* shared locals first (used by the headline and every card below) */
+    var cores = d.cpu_cores || 0;
+    var cpu = d.cpu_total;
+    var m = d.memory || {};
+    var g = d.gpu;
+    var tp2 = d.temp || {};
+    var tc = tp2.cpu_c;
+    var ld = d.load;
+    /* status strip: host | cpu | gpu | distro | ram | uptime */
+    var cpuM = short(txt(d.cpu_model).replace(/^Intel\(R\) Core\(TM\) /, "").replace(/^AMD /, ""), 20);
+    var gpuM = g ? short(txt(g.name).replace(/^NVIDIA /, "").replace(/^GeForce /, ""), 18) : "no gpu";
+    /* prefer the distro pretty name ("Ubuntu 24.04.2 LTS" -> "Ubuntu 24.04 LTS") */
+    var distro = txt(d.distro).replace(/\.\d+(?=\s+LTS|\s*$)/, "");
+    if (distro === "--") { distro = txt(d.os); }
+    $("specs").innerHTML = '<b class="hn">' + txt(d.host) + "</b>" +
+      " &nbsp;|&nbsp; <b>" + cpuM + "</b> " + num(cores, 0) + "T" +
+      " &nbsp;|&nbsp; <b>" + gpuM + "</b>" + (g ? " " + num(g.mem_total_mb / 1024, 0) + "G" : "") +
+      " &nbsp;|&nbsp; <b>" + distro + "</b>" +
+      /* MemTotal excludes kernel/GPU reservations, so round up to the installed
+         module size (188 GiB visible -> 192G) and state the generation. */
+      (m.total_mb ? " &nbsp;|&nbsp; " + num(instG(m.total_mb), 0) + "G DDR5" : "") +
+      " &nbsp;|&nbsp; <b>UP</b> " + dur(d.uptime_sec);
+
+    /* ---- CPU card ---- */
+    $("cpuVal").innerHTML = num(cpu, 1);
+    $("cpuVal").className = "v " + cls(cpu, 55, 85);
+    ring($("cpuRing"), cpu, rgba(loadColor(cpu || 0), 0.95));
+    $("cpuName").innerHTML = cores ? (cores + " threads") : "";
+    $("coreCount").innerHTML = num(cores, 0);
+    $("coreCount2").innerHTML = cores ? (cores + " logical") : "";
+    $("cpuLoad").innerHTML = ld ? ("load " + num(ld["1"], 2) + " / " + num(ld["5"], 2)) : "load --";
+    $("cpuTemp").innerHTML = (tc === null || tc === undefined) ? "--" : num(tc, 0) + "&deg;";
+    $("cpuTemp").className = "v " + (tc === null || tc === undefined ? "" : (tc < 45 ? "k-cpu" : (tc < 80 ? "k-hot" : "k-bad")));
+    ring($("tempRing"), tc === null || tc === undefined ? 0 : tc,
+         rgba(tc === null || tc === undefined ? AC.idle : (tc < 50 ? AC.cpu : (tc < 75 ? AC.hot : AC.bad)), 0.95));
+    $("tempSrc").innerHTML = tc === null || tc === undefined ? "no sensor" : ("cpu package " + num(tc, 0) + " C &nbsp;·&nbsp; " + (tp2.fans ? tp2.fans.length : 0) + " fans");
+    $("uptime").innerHTML = dur(d.uptime_sec);
+    if (!replay) { histCpu.push(cpu || 0); }
+    if (histCpu.length > 90) { histCpu.shift(); }
+    chart($("cpuHist"), [{ data: histCpu, color: rgbc(AC.cpu) }]);
+
+    /* ---- memory card ---- */
+    var mPct = m.pct;
+    var sPct = m.swap_total_mb ? (m.swap_used_mb / m.swap_total_mb * 100) : 0;
+    $("ramTotal").innerHTML = m.total_mb ? num(instG(m.total_mb), 0) + " GB" : "";
+    $("memPct").innerHTML = num(mPct, 1);
+    $("memPct").className = "v " + cls(mPct, 70, 88);
+    ring($("ramRing"), mPct, rgba(loadColor(mPct || 0), 0.95));
+    $("memVal").innerHTML = m.total_mb ? (gb(m.used_mb) + " / " + gb(m.total_mb)) : "--";
+    $("swapPct").innerHTML = num(sPct, 1);
+    $("swapVal").innerHTML = m.swap_total_mb ? (mb(m.swap_used_mb) + " / " + gb(m.swap_total_mb)) : "n/a";
+    ring($("swapRing"), sPct, rgba(AC.ram, 0.85));
+    $("loadTag").innerHTML = ld ? ("load " + num(ld["1"], 2) + " / " + num(ld["5"], 2) + " / " + num(ld["15"], 2)) : "load --";
+    if (!replay) { histMem.push(mPct || 0); }
+    if (histMem.length > 90) { histMem.shift(); }
+    chart($("memHist"), [{ data: histMem, color: rgbc(AC.ram) }]);
+
+    /* ---- gpu card ---- */
+    if (g) {
+      $("gpuName").innerHTML = short(g.name, 26);
+      var gu = g.util || 0, vPct = g.mem_total_mb ? (g.mem_used_mb / g.mem_total_mb * 100) : 0;
+      $("gpuUtil").innerHTML = num(gu, 0);
+      $("gpuUtil").className = "v " + cls(gu, 55, 85);
+      ring($("gpuRing"), gu, rgba(AC.gpu, 0.95));
+      /* first caption carries power + temperature, second ring is VRAM */
+      $("gpuPow").innerHTML = num(g.power_w, 1) + " W &nbsp;·&nbsp; " + num(g.temp, 0) + "&deg;";
+      $("vramPct").innerHTML = num(vPct, 1);
+      $("vramPct").className = "v " + (vPct < 60 ? "k-gpu" : (vPct < 85 ? "k-hot" : "k-bad"));
+      ring($("vramRing"), vPct,
+           rgba(vPct < 60 ? AC.gpu : (vPct < 85 ? AC.hot : AC.bad), 0.95));
+      $("gpuVram").innerHTML = gb(g.mem_used_mb) + " / " + gb(g.mem_total_mb);
+      $("gpuPowNow").innerHTML = num(g.power_w, 1) + " W";
+      if (!replay) { histGpu.push(gu); }
+    } else {
+      $("gpuName").innerHTML = "no nvidia-smi";
+      $("gpuUtil").innerHTML = "n/a";
+      ring($("gpuRing"), 0, "rgba(255,255,255,.12)");
+      $("vramPct").innerHTML = "n/a";
+      ring($("vramRing"), 0, TH.soft);
+      $("gpuVram").innerHTML = "n/a";
+      $("gpuPow").innerHTML = "n/a";
+      $("gpuPowNow").innerHTML = "n/a";
+      if (!replay) { histGpu.push(0); }
+    }
+    if (histGpu.length > 90) { histGpu.shift(); }
+    chart($("gpuHist"), [{ data: histGpu, color: rgbc(AC.gpu) }]);
+    $("fanRpm").innerHTML = (function () {
+      var gf = (g && typeof g.fan_pct === "number") ? g.fan_pct : null;
+      if (gf !== null) { return "fan " + num(gf, 0) + "%"; }
+      return (tp2.fans && tp2.fans.length) ? (num(tp2.fans[0].rpm, 0) + " rpm") : "fan n/a";
+    })();
+    drawUsage();
+    paintSvc(d.services);
+
+    /* ---- per-core rows ---- */
+    var pc = d.cpu_cores_pct || [], i;
+    if (coreEls.length !== pc.length) { coreSkeleton(pc.length); }
+    for (i = 0; i < pc.length; i++) {
+      var v = (pc[i] === undefined || pc[i] === null) ? 0 : pc[i];
+      var bar = $("pc" + i);
+      if (bar) {
+        bar.style.width = Math.min(100, v) + "%";
+        bar.style.background = rgba(loadColor(v), 0.95);
+      }
+      var pv = $("pv" + i);
+      if (pv) { pv.innerHTML = num(v, 0) + "%"; }
+    }
+
+    /* ---- process table ---- */
+    var tps = (d.top_procs || []).slice(0, 6), html = "", z;
+    for (z = 0; z < tps.length; z++) {
+      var pr = tps[z];
+      html += '<tr' + (z === 0 ? ' class="lead"' : "") + '><td class="n">' + pr.pid + '</td><td>' + short(pr.name, 18) + '</td>' +
+              '<td class="b"><div class="bar2"><i id="tp' + z + '" style="background:' + rgba(loadColor(pr.cpu || 0), .95) + '"></i></div></td>' +
+              '<td class="n">' + num(pr.cpu, 1) + '</td><td class="n">' + num(pr.mem_gb, 2) + "</td></tr>";
+    }
+    if (!tps.length) { html = '<tr><td colspan="5" class="dim">not available on this platform</td></tr>'; }
+    $("tops").tBodies[0].innerHTML = html;
+    for (z = 0; z < tps.length; z++) {
+      var el2 = $("tp" + z);
+      if (el2) { el2.style.width = Math.min(100, tps[z].cpu) + "%"; }
+    }
+    $("topHint").innerHTML = tps.length ? ("top " + tps.length + " by cpu") : "";
+    var dk2 = d.docker;
+    $("dockerTag").innerHTML = dk2 ? (num(dk2.containers_running, 0) + " running / " + num(dk2.images, 0) + " images") : "n/a";
+
+    /* ---- storage table ---- */
+    var ds = d.disks || [], dhtml = "", maxPct = 0, k2;
+    for (k2 = 0; k2 < ds.length; k2++) {
+      var dd = ds[k2];
+      if (dd.pct > maxPct) { maxPct = dd.pct; }
+      dhtml += '<tr' + (k2 === 0 ? ' class="lead"' : "") + '><td>' + short(dd.mount, 12) + '</td><td class="n">' +
+               num(dd.used_gb, 1) + " / " + num(dd.total_gb, 1) + '</td>' +
+               '<td class="b"><div class="bar2"><i id="dk' + k2 + '" style="background:' + rgba(loadColor(dd.pct), .95) + '"></i></div></td>' +
+               '<td class="n">' + num(dd.pct, 1) + "</td></tr>";
+    }
+    if (!ds.length) { dhtml = '<tr><td colspan="4" class="dim">no fixed disks reported</td></tr>'; }
+    $("disks").tBodies[0].innerHTML = dhtml;
+    for (k2 = 0; k2 < ds.length; k2++) {
+      var el = $("dk" + k2);
+      if (el) { el.style.width = ds[k2].pct + "%"; }
+    }
+    $("dskCount").innerHTML = ds.length ? (ds.length + " volumes") : "";
+
+    /* ---- sensors grid ---- */
+    var zones = tp2.zones || [], fans = tp2.fans || [], sh = "", i3;
+    for (i3 = 0; i3 < zones.length && i3 < 4; i3++) {
+      sh += '<div class="s"><span>' + short(zones[i3].name, 14) + '</span><b>' + num(zones[i3].c, 0) + " &deg;C</b></div>";
+    }
+    for (i3 = 0; i3 < fans.length && i3 < 4; i3++) {
+      sh += '<div class="s"><span>' + short(fans[i3].name, 14) + '</span><b>' + num(fans[i3].rpm, 0) + " rpm</b></div>";
+    }
+    if (!sh) { sh = '<div class="s">no hwmon sensors reported</div>'; }
+    $("sensors").innerHTML = sh;
+    $("sensorSrc").innerHTML = (tc === null || tc === undefined) ? "" : ("cpu " + num(tc, 0) + "°C");
+
+    /* ---- network + host ---- */
+    var nn = d.net || {};
+    $("netVal").innerHTML = num(nn.rx_kbps, 1) + " / " + num(nn.tx_kbps, 1) + " KB/s";
+    if (!replay) { histNet.push([nn.rx_kbps || 0, nn.tx_kbps || 0]); }
+    if (histNet.length > 90) { histNet.shift(); }
+    chart($("netHist"), [
+      { data: histNet.map(function (p) { return p[0]; }), color: rgbc(AC.net) },
+      { data: histNet.map(function (p) { return p[1]; }), color: rgbc(AC.dsk) }
+    ]);
+    $("loadTag2").innerHTML = ld ? (num(ld["1"], 2) + " / " + num(ld["5"], 2) + " / " + num(ld["15"], 2)) : "n/a";
+    $("archTag").innerHTML = short(d.arch, 8) + " · " + short(txt(d.os).replace(/^Linux /, ""), 22);
+    $("probeUrl").innerHTML = probeUrl().replace(/^(https?|ssh):\/\//, "");
+    $("probeShort").innerHTML = (probeUrl().indexOf("ssh://") === 0 ? "ssh read-only" : "probe") +
+      " " + (d.interval || 2) + "s @ " + probeUrl().replace(/^(https?|ssh):\/\//, "");
+
+    lastOk = Date.now();
+    first = false;
+  }
+
+  /* heartbeat */
+  setInterval(function () {
+    if (lastOk && Date.now() - lastOk > 8000) {
+      $("live").innerHTML = "&#9679; STALE"; $("live").className = "down";
+    }
+  }, 1000);
+  /* theme: restore last choice, wire the header chip, paint the first frame */
+  (function () {
+    var saved = "";
+    try { saved = localStorage.getItem(THEME_KEY) || ""; } catch (e0) { }
+    setTheme(saved === "light" ? "light" : "dark", false);
+    var chip = $("thm");
+    if (chip) {
+      chip.onclick = function () { setTheme(isLight() ? "dark" : "light", true); };
+    }
+    window.__setTheme = setTheme;   /* preview / adb test hook */
+  })();
+  drawUsage();
+  bindSvc();
+
+  /* ---------------- SSH raw counters -> dashboard snapshot ----------------
+     The app pipes probe_remote.py into `python3 -` on the server and gets raw
+     cumulative counters back; deltas are computed here so a dropped poll never
+     skews the numbers. */
+  var rawPrev = null, rawPrevMs = 0;
+
+  function pctOf(dTotal, dIdle) {
+    if (!(dTotal > 0)) { return null; }
+    var v = (1 - dIdle / dTotal) * 100;
+    return v < 0 ? 0 : (v > 100 ? 100 : v);
+  }
+
+  function adaptRaw(r) {
+    var nowMs = (typeof r.ts === "number" ? r.ts : Date.now() / 1000) * 1000;
+    var dt = rawPrevMs > 0 ? Math.max(0.2, (nowMs - rawPrevMs) / 1000) : 0;
+    var d = {
+      ts: r.ts, interval: 2, host: r.host, os: r.os, distro: r.distro,
+      arch: r.arch, cpu_model: r.cpu_model, cpu_cores: r.cpu_cores,
+      cpu_total: null, cpu_cores_pct: [], memory: {}, disks: [], net: null,
+      gpu: r.gpu || null, gpu_count: r.gpu ? 1 : 0, top_procs: r.top || [],
+      temp: r.temp || { cpu_c: null, zones: [], fans: [] },
+      load: r.load || null, docker: null, uptime_sec: r.uptime_sec || 0,
+      /* service up/down rides along with every probe snapshot; without this the
+         discs could never turn green (they always painted "off") */
+      services: r.services || []
+    };
+    var prevCpu = rawPrev ? rawPrev.cpu : r.cpu;
+    var curCpu = rawPrev ? r.cpu : r.cpu2;
+    if (prevCpu && curCpu) {
+      var v = pctOf(curCpu[0] - prevCpu[0], curCpu[1] - prevCpu[1]);
+      if (v !== null) { d.cpu_total = v; }
+    }
+    var prevCores = rawPrev ? rawPrev.cores : r.cores;
+    var curCores = rawPrev ? r.cores : r.cores2;
+    if (prevCores && curCores) {
+      var n = Math.min(curCores.length, prevCores.length), i, c;
+      for (i = 0; i < n; i++) {
+        c = pctOf(curCores[i][0] - prevCores[i][0], curCores[i][1] - prevCores[i][1]);
+        d.cpu_cores_pct.push(c === null ? 0 : c);
+      }
+    }
+    var m = r.mem || {};
+    if (m.total_kb) {
+      var used = Math.max(0, m.total_kb - m.avail_kb);
+      d.memory = {
+        total_mb: m.total_kb / 1024, used_mb: used / 1024,
+        pct: used / m.total_kb * 100,
+        swap_total_mb: (m.swap_total_kb || 0) / 1024,
+        swap_used_mb: ((m.swap_total_kb || 0) - (m.swap_free_kb || 0)) / 1024
+      };
+    }
+    var disks = r.disks || [], k, disk, du;
+    for (k = 0; k < disks.length; k++) {
+      disk = disks[k];
+      du = Math.max(0, disk.total_gb - disk.free_gb);
+      d.disks.push({
+        mount: disk.mount, fs: disk.fs, total_gb: disk.total_gb, used_gb: du,
+        pct: disk.total_gb ? du / disk.total_gb * 100 : 0
+      });
+    }
+    if (rawPrev && dt > 0 && r.net && rawPrev.net) {
+      var pm = {}, j;
+      for (j = 0; j < rawPrev.net.length; j++) { pm[rawPrev.net[j].name] = rawPrev.net[j]; }
+      var best = null;
+      for (j = 0; j < r.net.length; j++) {
+        var it = r.net[j], pv = pm[it.name];
+        if (!pv || it.name === "lo" || it.name === "lo0") { continue; }
+        var di = Math.max(0, it.rx - pv.rx), dx = Math.max(0, it.tx - pv.tx);
+        if (best === null || di + dx > best[0]) { best = [di + dx, it.name, di, dx]; }
+      }
+      if (best) {
+        d.net = { iface: best[1], rx_kbps: best[2] / 1024 / dt, tx_kbps: best[3] / 1024 / dt };
+      }
+    }
+    rawPrev = r;
+    rawPrevMs = nowMs;
+    return d;
+  }
+
+  function looksRaw(o) {
+    return o && typeof o === "object" && o.mem && o.cpu && !o.memory;
+  }
+
+  window.__push = function (payload) {
+    var o = payload;
+    if (typeof o === "string") {
+      try { o = JSON.parse(o); } catch (e0) { render({ error: "bad json" }); return; }
+    }
+    if (!o) { return; }
+    if (o.error) { render(o); return; }
+    var d = o;
+    try { d = looksRaw(o) ? adaptRaw(o) : o; } catch (e1) { render({ error: "decode failed: " + e1 }); return; }
+    lastSnap = d;
+    try { render(d); }
+    catch (e1b) { render({ error: "decode failed: " + e1b }); }
+  };
+
+  /* desktop / standalone fallback: the same page polls the probe itself */
+  if (!(window.HpScopeBridge && window.HpScopeBridge.config)) {
+    try { if (window.HpScopeBridge && window.HpScopeBridge.ready) { window.HpScopeBridge.ready(); } } catch (e2) { }
+    var poll = function () {
+      var x = new XMLHttpRequest();
+      x.open("GET", url, true);
+      x.onreadystatechange = function () {
+        if (x.readyState === 4) {
+          if (x.status === 200) {
+            window.__push(x.responseText);
+          } else { render({ error: "HTTP " + x.status }); }
+        }
+      };
+      x.onerror = function () { render({ error: "xhr failed" }); };
+      try { x.send(null); } catch (e4) { }
+    };
+    poll(); setInterval(poll, 2000);
+  }
+
+  /* long-press opens the settings dialog through the bridge */
+  document.addEventListener("DOMContentLoaded", function () {
+    var press = null;
+    document.body.addEventListener("touchstart", function () {
+      press = setTimeout(function () {
+        try { if (window.HpScopeBridge && window.HpScopeBridge.edit) { window.HpScopeBridge.edit(); } } catch (e5) { }
+      }, 1200);
+    }, false);
+    var cancelPress = function () { clearTimeout(press); };
+    document.body.addEventListener("touchend", cancelPress, false);
+    document.body.addEventListener("touchmove", cancelPress, false);
+    document.body.addEventListener("touchcancel", cancelPress, false);
+  });
+})();
+</script>
+</body>
+</html>
